@@ -1,0 +1,106 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-05-08 22:46:32.633270",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "cliente_responsavel_status_section",
+  "customer",
+  "status",
+  "marca_modelo_e_checklist_inicial_section",
+  "marca",
+  "modelo",
+  "imei",
+  "imei_2",
+  "numero_de_serie",
+  "cor",
+  "armazenamento"
+ ],
+ "fields": [
+  {
+   "fieldname": "marca",
+   "fieldtype": "Data",
+   "label": "Marca"
+  },
+  {
+   "fieldname": "modelo",
+   "fieldtype": "Data",
+   "label": "Modelo"
+  },
+  {
+   "fieldname": "marca_modelo_e_checklist_inicial_section",
+   "fieldtype": "Section Break",
+   "label": "Ficha t\u00e9cnica"
+  },
+  {
+   "fieldname": "imei",
+   "fieldtype": "Data",
+   "label": "IMEI"
+  },
+  {
+   "fieldname": "numero_de_serie",
+   "fieldtype": "Data",
+   "label": "N\u00famero de s\u00e9rie"
+  },
+  {
+   "fieldname": "imei_2",
+   "fieldtype": "Data",
+   "label": "IMEI II"
+  },
+  {
+   "fieldname": "cor",
+   "fieldtype": "Data",
+   "label": "Cor"
+  },
+  {
+   "fieldname": "armazenamento",
+   "fieldtype": "Int",
+   "label": "Armazenamento"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Cliente Respons\u00e1vel",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "cliente_responsavel_status_section",
+   "fieldtype": "Section Break",
+   "label": "Cliente Respons\u00e1vel e status"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Ativo\nInativo"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-05-11 17:31:19.175249",
+ "modified_by": "Administrator",
+ "module": "Ogun",
+ "name": "Celular",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

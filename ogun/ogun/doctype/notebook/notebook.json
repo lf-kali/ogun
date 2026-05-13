@@ -1,0 +1,157 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-05-11 01:58:49.647212",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "cliente_responsavel_status_section",
+  "customer",
+  "status",
+  "ficha_tecnica_section",
+  "marca",
+  "familialinha",
+  "modelo",
+  "cor",
+  "sku_fabricante",
+  "numero_de_serie",
+  "specs_section",
+  "sistema_operacional",
+  "processador",
+  "arquitetura_do_processador",
+  "tipo_de_armazenamento",
+  "capacidade_de_armazenamento",
+  "tipo_de_placa_de_video",
+  "marca_placa_de_video",
+  "modelo_placa_de_video"
+ ],
+ "fields": [
+  {
+   "fieldname": "marca",
+   "fieldtype": "Data",
+   "label": "Marca"
+  },
+  {
+   "fieldname": "ficha_tecnica_section",
+   "fieldtype": "Section Break",
+   "label": "Ficha t\u00e9cnica"
+  },
+  {
+   "fieldname": "familialinha",
+   "fieldtype": "Data",
+   "label": "Fam\u00edlia/Linha"
+  },
+  {
+   "fieldname": "modelo",
+   "fieldtype": "Data",
+   "label": "Modelo"
+  },
+  {
+   "fieldname": "sku_fabricante",
+   "fieldtype": "Data",
+   "label": "SKU Fabricante"
+  },
+  {
+   "fieldname": "processador",
+   "fieldtype": "Data",
+   "label": "Processador"
+  },
+  {
+   "fieldname": "arquitetura_do_processador",
+   "fieldtype": "Select",
+   "label": "Arquitetura do processador",
+   "options": "x86\nx64\nARM"
+  },
+  {
+   "fieldname": "tipo_de_armazenamento",
+   "fieldtype": "Select",
+   "label": "Tipo de armazenamento",
+   "options": "HD\nSSD (SATA)\nSSD (NVME)"
+  },
+  {
+   "fieldname": "capacidade_de_armazenamento",
+   "fieldtype": "Data",
+   "label": "Capacidade de armazenamento"
+  },
+  {
+   "fieldname": "tipo_de_placa_de_video",
+   "fieldtype": "Select",
+   "label": "Tipo de placa de video",
+   "options": "Integrada\nDedicada"
+  },
+  {
+   "fieldname": "modelo_placa_de_video",
+   "fieldtype": "Data",
+   "label": "Modelo placa de video"
+  },
+  {
+   "fieldname": "marca_placa_de_video",
+   "fieldtype": "Select",
+   "label": "Marca placa de video"
+  },
+  {
+   "fieldname": "specs_section",
+   "fieldtype": "Section Break",
+   "label": "Specs"
+  },
+  {
+   "fieldname": "sistema_operacional",
+   "fieldtype": "Data",
+   "label": "Sistema operacional"
+  },
+  {
+   "fieldname": "cor",
+   "fieldtype": "Data",
+   "label": "Cor/acabamento"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Cliente Respons\u00e1vel",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "numero_de_serie",
+   "fieldtype": "Data",
+   "label": "Numero de Serie"
+  },
+  {
+   "fieldname": "cliente_responsavel_status_section",
+   "fieldtype": "Section Break",
+   "label": "Cliente Responsavel e status"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Ativo\nInativo"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-05-11 17:32:18.928010",
+ "modified_by": "Administrator",
+ "module": "Ogun",
+ "name": "Notebook",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

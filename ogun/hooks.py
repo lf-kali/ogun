@@ -5,6 +5,28 @@ app_description = "workbench tools for cellphone repair shops"
 app_email = "neogen.informatica@gmail.com"
 app_license = "mit"
 
+override_doctype_dashboards = {
+"Customer": "ogun.utils.customer_dashboard.get_data"
+}
+
+# ─── Fixtures ───────────────────────────────────────────────────────────────
+# Cada entrada diz: "ao exportar/importar fixtures, inclua registros desse
+# DocType que correspondam a esses filtros"
+fixtures = [
+    {
+        "dt": "Custom Field",           # DocType a ser gerenciado
+        "filters": [                    # Quais registros desse DocType
+            ["dt", "=", "Customer"]     # Custom Fields do DocType Customer
+        ]
+    },
+    {
+        "dt": "Client Script",
+        "filters": [
+            ["dt", "=", "Customer"]     # Client Scripts do DocType Customer
+        ]
+    }
+]
+
 # Apps
 # ------------------
 
@@ -181,9 +203,6 @@ app_license = "mit"
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
 # along with any modifications made in other Frappe apps
-# override_doctype_dashboards = {
-# 	"Task": "ogun.task.get_dashboard_data"
-# }
 
 # exempt linked doctypes from being automatically cancelled
 #

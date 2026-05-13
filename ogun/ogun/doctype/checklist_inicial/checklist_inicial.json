@@ -1,0 +1,88 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-05-08 23:17:34.664766",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "estado_externo",
+  "liga_normalmente",
+  "audio",
+  "display",
+  "toque",
+  "bateria",
+  "c\u00e2mera_traseira",
+  "c\u00e2mera_frontal",
+  "observa\u00e7\u00f5es"
+ ],
+ "fields": [
+  {
+   "fieldname": "estado_externo",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Estado externo",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "liga_normalmente",
+   "fieldtype": "Check",
+   "label": "Liga normalmente"
+  },
+  {
+   "fieldname": "audio",
+   "fieldtype": "Data",
+   "label": "Audio"
+  },
+  {
+   "fieldname": "display",
+   "fieldtype": "Select",
+   "label": "Display",
+   "options": "Ok\nDanificada\nSem v\u00eddeo"
+  },
+  {
+   "fieldname": "toque",
+   "fieldtype": "Select",
+   "label": "Toque",
+   "options": "Ok\nDanificado\nToque fantasma\nN\u00e3o funciona"
+  },
+  {
+   "fieldname": "bateria",
+   "fieldtype": "Select",
+   "label": "Bateria",
+   "options": "Ok\nDanificada\nInchada\nN\u00e3o carrega"
+  },
+  {
+   "fieldname": "c\u00e2mera_traseira",
+   "fieldtype": "Select",
+   "label": "C\u00e2mera traseira",
+   "options": "Ok\nDanificada\nN\u00e3o funciona"
+  },
+  {
+   "fieldname": "c\u00e2mera_frontal",
+   "fieldtype": "Select",
+   "label": "C\u00e2mera frontal",
+   "options": "Ok\nDanificada\nN\u00e3o funciona"
+  },
+  {
+   "fieldname": "observa\u00e7\u00f5es",
+   "fieldtype": "Small Text",
+   "label": "Observa\u00e7\u00f5es"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-05-08 23:39:57.429769",
+ "modified_by": "Administrator",
+ "module": "Ogun",
+ "name": "Checklist Inicial",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
