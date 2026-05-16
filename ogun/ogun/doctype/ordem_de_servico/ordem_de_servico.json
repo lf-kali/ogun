@@ -7,22 +7,43 @@
  "field_order": [
   "cliente_section",
   "cliente",
+  "status",
+  "prazo",
   "dispositivo_section",
   "tipo_dispositivo",
-  "dispositivo"
+  "dispositivo",
+  "column_break_nvhs",
+  "descricao_do_problema",
+  "acessorios_entregues_section",
+  "acess\u00f3rios_entregues",
+  "checklist_inicial_section",
+  "liga_normalmente",
+  "tela",
+  "bateria",
+  "audio",
+  "display",
+  "toque",
+  "camera_traseira",
+  "camera_frontal",
+  "column_break_ayqq",
+  "estado_externo",
+  "observacoes_section",
+  "observacoes"
  ],
  "fields": [
   {
    "fieldname": "tipo_dispositivo",
    "fieldtype": "Select",
    "label": "Tipo dispositivo",
-   "options": "Celular\nNotebook"
+   "options": "Celular\nNotebook",
+   "reqd": 1
   },
   {
    "fieldname": "dispositivo",
    "fieldtype": "Dynamic Link",
    "label": "Dispositivo",
-   "options": "tipo_dispositivo"
+   "options": "tipo_dispositivo",
+   "reqd": 1
   },
   {
    "fieldname": "dispositivo_section",
@@ -32,19 +53,132 @@
   {
    "fieldname": "cliente_section",
    "fieldtype": "Section Break",
-   "label": "Cliente"
+   "label": "Operacional/Bancada"
   },
   {
    "fieldname": "cliente",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Cliente",
-   "options": "Customer"
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
+   "default": "Pendente",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pendente\nConfirmada\nAdquirindo Pe\u00e7as\nEm andamento\nFinalizada\nCancelada"
+  },
+  {
+   "fieldname": "prazo",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Prazo",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_nvhs",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "descricao_do_problema",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Descri\u00e7\u00e3o do problema",
+   "reqd": 1
+  },
+  {
+   "fieldname": "checklist_inicial_section",
+   "fieldtype": "Section Break",
+   "label": "Checklist inicial"
+  },
+  {
+   "fieldname": "estado_externo",
+   "fieldtype": "Small Text",
+   "label": "Estado externo",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "liga_normalmente",
+   "fieldtype": "Check",
+   "label": "Liga normalmente"
+  },
+  {
+   "depends_on": "eval:doc.liga_normalmente == 1",
+   "fieldname": "audio",
+   "fieldtype": "Data",
+   "label": "Audio"
+  },
+  {
+   "depends_on": "eval:doc.liga_normalmente == 1",
+   "fieldname": "display",
+   "fieldtype": "Select",
+   "label": "Display",
+   "options": "Ok\nDanificado\nSem v\u00eddeo"
+  },
+  {
+   "depends_on": "eval:doc.liga_normalmente == 1",
+   "fieldname": "toque",
+   "fieldtype": "Select",
+   "label": "Toque",
+   "options": "Ok\nDanificado\nToque fantasma\nN\u00e3o funciona"
+  },
+  {
+   "fieldname": "bateria",
+   "fieldtype": "Select",
+   "label": "Bateria",
+   "options": "Ok\nDanificada\nAusente\nInchada\nN\u00e3o carrega"
+  },
+  {
+   "depends_on": "eval:doc.liga_normalmente == 1",
+   "fieldname": "camera_traseira",
+   "fieldtype": "Select",
+   "label": "C\u00e2mera traseira",
+   "options": "Ok\nDanificada\nN\u00e3o funciona"
+  },
+  {
+   "depends_on": "eval:doc.liga_normalmente == 1",
+   "fieldname": "camera_frontal",
+   "fieldtype": "Select",
+   "label": "C\u00e2mera frontal",
+   "options": "Ok\nDanificada\nN\u00e3o funciona"
+  },
+  {
+   "fieldname": "observacoes",
+   "fieldtype": "Small Text"
+  },
+  {
+   "fieldname": "column_break_ayqq",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "acess\u00f3rios_entregues",
+   "fieldtype": "Table",
+   "options": "Acessorio Cliente"
+  },
+  {
+   "fieldname": "acessorios_entregues_section",
+   "fieldtype": "Section Break",
+   "label": "Acess\u00f3rios entregues"
+  },
+  {
+   "fieldname": "observacoes_section",
+   "fieldtype": "Section Break",
+   "label": "Observa\u00e7\u00f5es"
+  },
+  {
+   "fieldname": "tela",
+   "fieldtype": "Select",
+   "label": "Tela",
+   "options": "Ok\nRachada\nDespeda\u00e7ada"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-05-11 01:48:56.743805",
+ "modified": "2026-05-15 21:17:22.876340",
  "modified_by": "Administrator",
  "module": "Ogun",
  "name": "Ordem de Servico",
@@ -59,6 +193,18 @@
    "read": 1,
    "report": 1,
    "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Tecnico",
    "share": 1,
    "write": 1
   }

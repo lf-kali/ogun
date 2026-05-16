@@ -1,0 +1,110 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:nome",
+ "creation": "2026-05-15 17:47:38.791564",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "nome",
+  "categoria",
+  "propriedades_aplicaveis_section",
+  "tem_padrao_tomada",
+  "tem_tipo_conector",
+  "tem_capacidade",
+  "tem_classe_velocidade",
+  "tem_conectividade_sem_fio",
+  "tem_layout",
+  "tem_potencia_watts"
+ ],
+ "fields": [
+  {
+   "fieldname": "nome",
+   "fieldtype": "Data",
+   "label": "Nome",
+   "unique": 1
+  },
+  {
+   "fieldname": "categoria",
+   "fieldtype": "Select",
+   "label": "Categoria",
+   "options": "Alimenta\u00e7\u00e3o\nConectividade\nProte\u00e7\u00e3o\nArmazenamento\nPerif\u00e9rico\nOutro"
+  },
+  {
+   "fieldname": "propriedades_aplicaveis_section",
+   "fieldtype": "Section Break",
+   "label": "Propriedades aplicaveis"
+  },
+  {
+   "default": "0",
+   "fieldname": "tem_padrao_tomada",
+   "fieldtype": "Check",
+   "label": "Tem padr\u00e3o de tomada"
+  },
+  {
+   "default": "0",
+   "fieldname": "tem_tipo_conector",
+   "fieldtype": "Check",
+   "label": "Tem tipo de conector"
+  },
+  {
+   "default": "0",
+   "fieldname": "tem_capacidade",
+   "fieldtype": "Check",
+   "label": "Tem capacidade"
+  },
+  {
+   "default": "0",
+   "fieldname": "tem_classe_velocidade",
+   "fieldtype": "Check",
+   "label": "Tem classe de velocidade"
+  },
+  {
+   "default": "0",
+   "fieldname": "tem_conectividade_sem_fio",
+   "fieldtype": "Check",
+   "label": "Tem conectividade sem fio"
+  },
+  {
+   "default": "0",
+   "fieldname": "tem_layout",
+   "fieldtype": "Check",
+   "label": "Tem layout (teclado)"
+  },
+  {
+   "default": "0",
+   "fieldname": "tem_potencia_watts",
+   "fieldtype": "Check",
+   "label": "Tem pot\u00eancia (Watts)"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-05-15 18:39:06.039985",
+ "modified_by": "Administrator",
+ "module": "Ogun",
+ "name": "Tipo Acessorio",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "quick_entry": 1,
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

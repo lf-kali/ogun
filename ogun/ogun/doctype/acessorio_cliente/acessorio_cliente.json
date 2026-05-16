@@ -1,0 +1,164 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-05-14 21:04:30.625259",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "tipo_acessorio",
+  "cor",
+  "padrao_tomada",
+  "tipo_conector",
+  "potencia_watts",
+  "capacidade",
+  "classe_velocidade",
+  "conectividade",
+  "layout_teclado",
+  "detalhes",
+  "_tem_layout",
+  "_tem_conectividade_sem_fio",
+  "_tem_capacidade",
+  "_tem_potencia_watts",
+  "_tem_tipo_conector",
+  "_tem_padrao_tomada"
+ ],
+ "fields": [
+  {
+   "fieldname": "tipo_acessorio",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Tipo de acess\u00f3rio",
+   "options": "Tipo Acessorio",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fetch_from": "tipo_acessorio.tem_padrao_tomada",
+   "fieldname": "_tem_padrao_tomada",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "_tem_padrao_tomada",
+   "print_hide": 1
+  },
+  {
+   "default": "0",
+   "fetch_from": "tipo_acessorio.tem_tipo_conector",
+   "fieldname": "_tem_tipo_conector",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "_tem_tipo_conector",
+   "print_hide": 1
+  },
+  {
+   "default": "0",
+   "fetch_from": "tipo_acessorio.tem_potencia_watts",
+   "fieldname": "_tem_potencia_watts",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "_tem_potencia_watts",
+   "print_hide": 1
+  },
+  {
+   "default": "0",
+   "fetch_from": "tipo_acessorio.tem_capacidade",
+   "fieldname": "_tem_capacidade",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "_tem_capacidade",
+   "print_hide": 1
+  },
+  {
+   "default": "0",
+   "fetch_from": "tipo_acessorio.tem_conectividade_sem_fio",
+   "fieldname": "_tem_conectividade_sem_fio",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "_tem_conectividade_sem_fio",
+   "print_hide": 1
+  },
+  {
+   "default": "0",
+   "fetch_from": "tipo_acessorio.tem_layout",
+   "fieldname": "_tem_layout",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "_tem_layout",
+   "print_hide": 1
+  },
+  {
+   "depends_on": "eval:doc._tem_padrao_tomada == 1",
+   "fieldname": "padrao_tomada",
+   "fieldtype": "Select",
+   "label": "Padr\u00e3o de tomada",
+   "options": "Tipo A (Flecha)\nTipo C (2 pinos)\nTipo N (3 pinos)"
+  },
+  {
+   "depends_on": "eval:doc._tem_tipo_conector == 1",
+   "fieldname": "tipo_conector",
+   "fieldtype": "Select",
+   "label": "Tipo de Conector",
+   "options": "USB-C\nUSB-A\nMicro-USB\nLightning\nP2 (3.5mm)\nThunderbolt 3\nThunderbolt 4\nUSB 3.0 Tipo B (HD)\nMagSafe\nPropriet\u00e1rio\nSD\nmicroSD\nCF\nCFexpress"
+  },
+  {
+   "depends_on": "eval:doc._tem_wattagem == 1",
+   "fieldname": "potencia_watts",
+   "fieldtype": "Int",
+   "label": "Pot\u00eancia (Watts)"
+  },
+  {
+   "depends_on": "eval:doc._tem_capacidade == 1",
+   "description": "Ex: 128GB, 1TB, 20000mAh",
+   "fieldname": "capacidade",
+   "fieldtype": "Data",
+   "label": "Capacidade"
+  },
+  {
+   "depends_on": "eval:doc._tem_classe_velocidade == 1",
+   "fieldname": "classe_velocidade",
+   "fieldtype": "Select",
+   "label": "Classe de velocidade",
+   "options": "Classe 4\nClasse 6\nClasse 10\nUHS-I (U1)\nUHS-I (U3)\nUHS-II\nUHS-III\nV30\nV60\nV90"
+  },
+  {
+   "depends_on": "eval:doc._tem_conectividade_sem_fio == 1",
+   "fieldname": "conectividade",
+   "fieldtype": "Select",
+   "label": "Conectividade",
+   "options": "Com fio\nBluetooth\n2.4GHz (dongle)\nBluetooth + 2.4GHz"
+  },
+  {
+   "depends_on": "eval:doc._tem_layout == 1",
+   "fieldname": "layout_teclado",
+   "fieldtype": "Select",
+   "label": "Layout",
+   "options": "ABNT2 (Portugu\u00eas BR)\nUS Internacional\nUK\nOutro"
+  },
+  {
+   "fieldname": "cor",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Cor"
+  },
+  {
+   "description": "Informa\u00e7\u00f5es espec\u00edficas n\u00e3o descritas acima",
+   "fieldname": "detalhes",
+   "fieldtype": "Small Text",
+   "label": "Detalhes / Observa\u00e7\u00f5es"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-05-15 21:03:07.757205",
+ "modified_by": "Administrator",
+ "module": "Ogun",
+ "name": "Acessorio Cliente",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

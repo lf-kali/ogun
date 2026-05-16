@@ -24,6 +24,9 @@ fixtures = [
         "filters": [
             ["dt", "=", "Customer"]     # Client Scripts do DocType Customer
         ]
+    },
+    {
+        "dt": "Tipo Acessorio",
     }
 ]
 
