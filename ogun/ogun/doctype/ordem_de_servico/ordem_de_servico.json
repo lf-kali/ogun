@@ -1,12 +1,14 @@
 {
  "actions": [],
- "allow_rename": 1,
+ "autoname": "format:OS-{DD}{MM}{YY}-{####}",
  "creation": "2026-05-08 23:57:46.422796",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
   "cliente_section",
   "cliente",
+  "tecnico_responsavel",
+  "column_break_zjzv",
   "status",
   "prazo",
   "dispositivo_section",
@@ -25,10 +27,15 @@
   "toque",
   "camera_traseira",
   "camera_frontal",
-  "column_break_ayqq",
   "estado_externo",
+  "items_section",
+  "itens",
+  "total",
   "observacoes_section",
-  "observacoes"
+  "observacoes",
+  "section_break_evlh",
+  "orcamento_ref",
+  "data_conclusao"
  ],
  "fields": [
   {
@@ -150,10 +157,6 @@
    "fieldtype": "Small Text"
   },
   {
-   "fieldname": "column_break_ayqq",
-   "fieldtype": "Column Break"
-  },
-  {
    "fieldname": "acess\u00f3rios_entregues",
    "fieldtype": "Table",
    "options": "Acessorio Cliente"
@@ -173,15 +176,61 @@
    "fieldtype": "Select",
    "label": "Tela",
    "options": "Ok\nRachada\nDespeda\u00e7ada"
+  },
+  {
+   "fieldname": "items_section",
+   "fieldtype": "Section Break",
+   "label": "Produtos e servi\u00e7os"
+  },
+  {
+   "fieldname": "itens",
+   "fieldtype": "Table",
+   "label": "Itens",
+   "options": "Item Fluxo"
+  },
+  {
+   "fieldname": "total",
+   "fieldtype": "Currency",
+   "label": "Total",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_zjzv",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "tecnico_responsavel",
+   "fieldtype": "Link",
+   "label": "T\u00e9cnico Respons\u00e1vel",
+   "link_filters": "[[\"User\",\"role\",\"=\",\"Tecnico\"]]",
+   "options": "User"
+  },
+  {
+   "fieldname": "section_break_evlh",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "orcamento_ref",
+   "fieldtype": "Link",
+   "label": "Ref. Or\u00e7amento",
+   "options": "Orcamento",
+   "read_only": 1
+  },
+  {
+   "fieldname": "data_conclusao",
+   "fieldtype": "Date",
+   "label": "Data conclus\u00e3o"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-05-15 21:17:22.876340",
+ "modified": "2026-07-20 20:48:29.360367",
  "modified_by": "Administrator",
  "module": "Ogun",
- "name": "Ordem de Servico",
+ "name": "Ordem De Servico",
+ "naming_rule": "Expression (old style)",
  "owner": "Administrator",
  "permissions": [
   {

@@ -1,0 +1,90 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"mPjzxEw2n_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Nova OS\",\"col\":6}},{\"id\":\"rWL04_nKmz\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Ordens de Servi\u00e7o\",\"col\":6}},{\"id\":\"fOcRkhOq1u\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Total em bancada\",\"col\":6}},{\"id\":\"1GgsCS0dR-\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Valor Estimado\",\"col\":6}},{\"id\":\"Ao-Q3qgc1V\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Total Cancelado\",\"col\":12}},{\"id\":\"tXthcHfkHu\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Ordens de servi\u00e7o\",\"col\":12}}]",
+ "creation": "2026-07-15 16:31:17.477476",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "small-file",
+ "idx": 0,
+ "indicator_color": "",
+ "is_hidden": 0,
+ "label": "Ordens de servi\u00e7o",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Ordens de Servi\u00e7o",
+   "link_count": 0,
+   "link_to": "Ordem De Servico",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Celulares",
+   "link_count": 0,
+   "link_to": "Celular",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-07-20 16:21:17.214061",
+ "modified_by": "Administrator",
+ "module": "Ogun",
+ "name": "Ordens de servi\u00e7o",
+ "number_cards": [
+  {
+   "label": "Total Cancelado",
+   "number_card_name": "Total Cancelado"
+  },
+  {
+   "label": "Valor Estimado",
+   "number_card_name": "Valor Estimado"
+  },
+  {
+   "label": "Total em bancada",
+   "number_card_name": "Total em bancada"
+  }
+ ],
+ "owner": "Administrator",
+ "parent_page": "Bancada",
+ "public": 1,
+ "quick_lists": [
+  {
+   "document_type": "Ordem De Servico",
+   "label": "Ordens de servi\u00e7o",
+   "quick_list_filter": "[]"
+  }
+ ],
+ "roles": [
+  {
+   "role": "Tecnico"
+  }
+ ],
+ "sequence_id": 2.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "New",
+   "label": "Nova OS",
+   "link_to": "Ordem De Servico",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Ordens de Servi\u00e7o",
+   "link_to": "Ordem De Servico",
+   "stats_filter": "[]",
+   "type": "DocType"
+  }
+ ],
+ "title": "Ordens de servi\u00e7o"
+}
