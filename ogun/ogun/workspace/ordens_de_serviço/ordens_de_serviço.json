@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\":\"mPjzxEw2n_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Nova OS\",\"col\":6}},{\"id\":\"rWL04_nKmz\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Ordens de Servi\u00e7o\",\"col\":6}},{\"id\":\"fOcRkhOq1u\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Total em bancada\",\"col\":6}},{\"id\":\"1GgsCS0dR-\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Valor Estimado\",\"col\":6}},{\"id\":\"Ao-Q3qgc1V\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Total Cancelado\",\"col\":12}},{\"id\":\"tXthcHfkHu\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Ordens de servi\u00e7o\",\"col\":12}}]",
+ "content": "[{\"id\":\"mPjzxEw2n_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Nova OS\",\"col\":6}},{\"id\":\"rWL04_nKmz\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Ordens de Servi\u00e7o\",\"col\":6}},{\"id\":\"PgBc4-IJqt\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"fOcRkhOq1u\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Total em bancada\",\"col\":6}},{\"id\":\"1GgsCS0dR-\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Valor Estimado\",\"col\":6}},{\"id\":\"Ao-Q3qgc1V\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Total Cancelado\",\"col\":12}},{\"id\":\"4o8pgwFAZv\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"tXthcHfkHu\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Ordens de servi\u00e7o\",\"col\":12}}]",
  "creation": "2026-07-15 16:31:17.477476",
  "custom_blocks": [],
  "docstatus": 0,
@@ -34,7 +34,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-07-20 16:21:17.214061",
+ "modified": "2026-07-21 02:17:19.888183",
  "modified_by": "Administrator",
  "module": "Ogun",
  "name": "Ordens de servi\u00e7o",
