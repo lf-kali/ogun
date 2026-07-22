@@ -27,7 +27,8 @@ fixtures = [
     },
     {
         "dt": "Tipo Acessorio",
-    }
+    },
+    
 ]
 
 # Apps
