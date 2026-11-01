@@ -1,0 +1,2161 @@
+// =============================================================================
+// ebisuCRM — Modelo de dados de referência v0.1
+// -----------------------------------------------------------------------------
+// Convenções
+// - PostgreSQL 16. IDs UUIDv7 (ordenáveis por tempo).
+// - Toda tabela de negócio carrega `tenant_id` (isolamento via Row Level
+//   Security: `tenant_id = current_setting('app.tenant_id')::uuid`) e, quando o
+//   dado pertence a um CNPJ, `empresa_id` (escopo LGPD/estoque/fiscal).
+// - Dinheiro: Decimal(14,2). Quantidade: Decimal(14,3).
+// - Soft delete via `deleted_at` em entidades que o usuário apaga pela UI.
+// - Ledgers (movimento de estoque, histórico de status, eventos de dispositivo,
+//   eventos de pontuação, audit log) são append-only.
+// - Referências polimórficas (`entidade_tipo` + `entidade_id`) não têm FK.
+// - Mapeamento com o Ogun indicado em comentários `Ogun:`.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// 1. PLATAFORMA — tenancy, empresas, usuários, RBAC
+// =============================================================================
+
+enum StatusTenant {
+  TRIAL
+  ATIVO
+  SUSPENSO
+  CANCELADO
+}
+
+/// Assinante da plataforma (ex.: uma rede de assistências).
+model Tenant {
+  id         String       @id @default(uuid(7)) @db.Uuid
+  nome       String
+  slug       String       @unique
+  plano      String       @default("free")
+  status     StatusTenant @default(TRIAL)
+  config     Json         @default("{}")
+  created_at DateTime     @default(now())
+  updated_at DateTime     @updatedAt
+
+  empresas Empresa[]
+  membros  Membro[]
+  papeis   Papel[]
+  api_keys ApiKey[]
+
+  @@map("tenant")
+}
+
+/// Empresa = CNPJ. É o controlador LGPD dos dados de clientes e dona do estoque.
+model Empresa {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  tenant_id     String    @db.Uuid
+  razao_social  String
+  nome_fantasia String
+  cnpj          String?
+  inscricao_est String?
+  email         String?
+  telefone      String?
+  endereco      Json? /// {cep, logradouro, numero, complemento, bairro, cidade, uf}
+  logo_url      String?
+  timezone      String    @default("America/Sao_Paulo")
+  moeda         String    @default("BRL")
+  /// validade_orcamento_dias, garantia_padrao_dias, prazo_padrao_dias, etc.
+  config        Json      @default("{}")
+  ativo         Boolean   @default(true)
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  deleted_at    DateTime?
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id])
+
+  atribuicoes         AtribuicaoPapel[]
+  api_keys            ApiKey[]
+  sequencias          SequenciaDocumento[]
+  contatos            Contato[]
+  origens             OrigemLead[]
+  capturas            CapturaLead[]
+  funis               Funil[]
+  negocios            Negocio[]
+  motivos_perda       MotivoPerda[]
+  atividades          Atividade[]
+  tarefas             Tarefa[]
+  regras_pontuacao    RegraPontuacao[]
+  regras_proxima_acao RegraProximaAcao[]
+  sugestoes_acao      SugestaoAcao[]
+  tags                Tag[]
+  dispositivos        Dispositivo[]
+  inspecoes           Inspecao[]
+  orcamentos          Orcamento[]
+  ordens_servico      OrdemServico[]
+  fornecedores        Fornecedor[]
+  categorias_item     CategoriaItem[]
+  itens               Item[]
+  compras             Compra[]
+  movimentos_estoque  MovimentoEstoque[]
+  vendas              Venda[]
+  titulos             TituloFinanceiro[]
+  modelos_mensagem    ModeloMensagem[]
+  config_notificacoes ConfigNotificacaoEvento[]
+  notificacoes        Notificacao[]
+  jobs_lote           JobLote[]
+
+  @@unique([tenant_id, cnpj])
+  @@index([tenant_id])
+  @@map("empresa")
+}
+
+/// Identidade global (um e-mail pode participar de vários tenants).
+model Usuario {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  email        String    @unique
+  nome         String
+  telefone     String?
+  senha_hash   String?
+  avatar_url   String?
+  mfa_secret   String? /// cifrado
+  ultimo_login DateTime?
+  ativo        Boolean   @default(true)
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  membros        Membro[]
+  refresh_tokens RefreshToken[]
+
+  @@map("usuario")
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  usuario_id  String    @db.Uuid
+  token_hash  String    @unique
+  familia     String    @db.Uuid /// rotação: reuse detection invalida a família
+  user_agent  String?
+  ip          String?
+  expira_em   DateTime
+  revogado_em DateTime?
+  created_at  DateTime  @default(now())
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@index([usuario_id])
+  @@map("refresh_token")
+}
+
+enum StatusMembro {
+  CONVIDADO
+  ATIVO
+  SUSPENSO
+}
+
+/// Vínculo usuário ↔ tenant. É o "ator" referenciado em todo o sistema.
+model Membro {
+  id         String       @id @default(uuid(7)) @db.Uuid
+  tenant_id  String       @db.Uuid
+  usuario_id String       @db.Uuid
+  status     StatusMembro @default(CONVIDADO)
+  cargo      String?
+  created_at DateTime     @default(now())
+  updated_at DateTime     @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id])
+  usuario Usuario @relation(fields: [usuario_id], references: [id])
+
+  atribuicoes         AtribuicaoPapel[]
+  contatos            Contato[]         @relation("ContatoResponsavel")
+  negocios            Negocio[]         @relation("NegocioResponsavel")
+  tarefas             Tarefa[]          @relation("TarefaResponsavel")
+  ordens_como_tecnico OrdemServico[]    @relation("OSTecnico")
+  apontamentos        ApontamentoOS[]
+
+  @@unique([tenant_id, usuario_id])
+  @@map("membro")
+}
+
+/// Papéis padrão (sistema=true, semeados por tenant): OWNER, ADMIN, GERENTE,
+/// ATENDENTE (comercial), TECNICO, ESTOQUISTA, FINANCEIRO.
+model Papel {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  tenant_id  String   @db.Uuid
+  chave      String
+  nome       String
+  descricao  String?
+  sistema    Boolean  @default(false)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant      Tenant            @relation(fields: [tenant_id], references: [id])
+  permissoes  PapelPermissao[]
+  atribuicoes AtribuicaoPapel[]
+
+  @@unique([tenant_id, chave])
+  @@map("papel")
+}
+
+/// Catálogo fixo de permissões no formato `recurso.acao`
+/// ex.: lead.create, lead.bulk_delete, os.change_status, estoque.ajuste,
+/// financeiro.ver_custos, config.rbac.
+model Permissao {
+  chave     String @id
+  recurso   String
+  acao      String
+  descricao String
+
+  papeis PapelPermissao[]
+
+  @@map("permissao")
+}
+
+enum EscopoPermissao {
+  PROPRIO /// só registros em que é responsável/técnico
+  EMPRESA /// todos os registros da(s) empresa(s) atribuída(s)
+  TENANT /// todas as empresas do tenant
+}
+
+model PapelPermissao {
+  papel_id        String          @db.Uuid
+  permissao_chave String
+  escopo          EscopoPermissao @default(EMPRESA)
+
+  papel     Papel     @relation(fields: [papel_id], references: [id], onDelete: Cascade)
+  permissao Permissao @relation(fields: [permissao_chave], references: [chave])
+
+  @@id([papel_id, permissao_chave])
+  @@map("papel_permissao")
+}
+
+/// Papel do membro em uma empresa (empresa_id nulo = todas as empresas do tenant).
+model AtribuicaoPapel {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  membro_id  String   @db.Uuid
+  papel_id   String   @db.Uuid
+  empresa_id String?  @db.Uuid
+  created_at DateTime @default(now())
+
+  membro  Membro   @relation(fields: [membro_id], references: [id], onDelete: Cascade)
+  papel   Papel    @relation(fields: [papel_id], references: [id], onDelete: Cascade)
+  empresa Empresa? @relation(fields: [empresa_id], references: [id])
+
+  @@unique([membro_id, papel_id, empresa_id])
+  @@map("atribuicao_papel")
+}
+
+/// Chaves para integrações máquina-a-máquina (formulários do site, n8n, etc.).
+model ApiKey {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  tenant_id   String    @db.Uuid
+  empresa_id  String    @db.Uuid
+  nome        String
+  prefixo     String    @unique /// exibido: ebk_live_ab12…
+  hash        String
+  escopos     String[] /// ex.: ["lead.create", "lead.update"]
+  ultimo_uso  DateTime?
+  expira_em   DateTime?
+  revogada_em DateTime?
+  criado_por  String?   @db.Uuid
+  created_at  DateTime  @default(now())
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id])
+  empresa Empresa @relation(fields: [empresa_id], references: [id])
+
+  @@map("api_key")
+}
+
+enum TipoDocumentoSequencia {
+  ORCAMENTO
+  ORDEM_SERVICO
+  COMPRA
+  VENDA
+}
+
+/// Numeração humana por empresa. Ogun: autoname "ORC-{DD}{MM}{YY}-{####}".
+model SequenciaDocumento {
+  id         String                 @id @default(uuid(7)) @db.Uuid
+  tenant_id  String                 @db.Uuid
+  empresa_id String                 @db.Uuid
+  tipo       TipoDocumentoSequencia
+  formato    String /// ex.: "OS-{YY}{MM}-{####}"
+  periodo    String                 @default("") /// chave de reinício (ex.: "2610")
+  proximo    Int                    @default(1)
+
+  empresa Empresa @relation(fields: [empresa_id], references: [id])
+
+  @@unique([empresa_id, tipo, periodo])
+  @@map("sequencia_documento")
+}
+
+model AuditLog {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  tenant_id       String   @db.Uuid
+  empresa_id      String?  @db.Uuid
+  ator_membro_id  String?  @db.Uuid
+  ator_api_key_id String?  @db.Uuid
+  entidade_tipo   String
+  entidade_id     String   @db.Uuid
+  acao            String /// create | update | delete | status_change | bulk_*
+  diff            Json?
+  ip              String?
+  request_id      String?
+  ocorreu_em      DateTime @default(now())
+
+  @@index([tenant_id, entidade_tipo, entidade_id])
+  @@index([tenant_id, ocorreu_em])
+  @@map("audit_log")
+}
+
+// =============================================================================
+// 2. CRM / PROSPECÇÃO
+// =============================================================================
+
+enum TipoPessoa {
+  PF
+  PJ
+}
+
+enum CanalComunicacao {
+  WHATSAPP
+  EMAIL
+  SMS
+}
+
+/// Lifecycle (inspirado em HubSpot/RD Station), no nível da pessoa.
+enum CicloVida {
+  LEAD /// só nome + contato
+  LEAD_QUALIFICADO /// perfil mínimo completo (dispositivo + interesse + canal)
+  OPORTUNIDADE /// tem orçamento em andamento
+  CLIENTE /// 1ª OS aprovada (conversão)
+  RECORRENTE /// 2+ OS
+  INATIVO /// sem interação há N meses / opt-out
+}
+
+enum Temperatura {
+  FRIO
+  MORNO
+  QUENTE
+}
+
+/// Quadrante Fit × Engajamento — responde "o que faço com este lead agora?"
+enum QuadranteLead {
+  PRONTO_PARA_COMPRAR /// fit alto + engajamento alto → abordar/fechar já
+  CULTIVAR /// fit alto + engajamento baixo → nutrir agora
+  PROSPECTAR /// fit baixo + engajamento alto → falta dado: completar perfil
+  TRABALHAR_DEPOIS /// fit baixo + engajamento baixo → baixa prioridade
+}
+
+/// Pessoa/empresa atendida. Lead e Cliente são a MESMA entidade em estágios
+/// diferentes de ciclo de vida (evita a "conversão com cópia" do Salesforce).
+/// Ogun: Customer (ERPNext).
+model Contato {
+  id                String            @id @default(uuid(7)) @db.Uuid
+  tenant_id         String            @db.Uuid
+  empresa_id        String            @db.Uuid
+  tipo_pessoa       TipoPessoa        @default(PF)
+  nome              String
+  documento         String? /// CPF/CNPJ (opcional até o fechamento)
+  email             String?
+  email_normalizado String?
+  telefone_e164     String?
+  whatsapp_e164     String?
+  canal_preferido   CanalComunicacao?
+  data_nascimento   DateTime?         @db.Date
+  endereco          Json?
+  ciclo_vida        CicloVida         @default(LEAD)
+  origem_id         String?           @db.Uuid
+  responsavel_id    String?           @db.Uuid
+
+  // --- inteligência (recalculada por job; nunca editada à mão) ---
+  score_fit           Int           @default(0) /// 0–50
+  score_engajamento   Int           @default(0) /// 0–50 com decaimento
+  score_total         Int           @default(0)
+  temperatura         Temperatura   @default(FRIO)
+  quadrante           QuadranteLead @default(TRABALHAR_DEPOIS)
+  completude_perfil   Int           @default(0) /// % de requisitos atendidos
+  campos_faltantes    String[] /// ex.: ["dispositivo", "canal_preferido"]
+  ultima_interacao_em DateTime?
+  convertido_em       DateTime?
+  ltv                 Decimal       @default(0) @db.Decimal(14, 2)
+
+  observacoes      String?
+  erp_customer_ref String?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+  deleted_at       DateTime?
+
+  empresa     Empresa     @relation(fields: [empresa_id], references: [id])
+  origem      OrigemLead? @relation(fields: [origem_id], references: [id])
+  responsavel Membro?     @relation("ContatoResponsavel", fields: [responsavel_id], references: [id])
+
+  capturas       CapturaLead[]
+  consentimentos Consentimento[]
+  negocios       Negocio[]
+  atividades     Atividade[]
+  tarefas        Tarefa[]
+  eventos_score  EventoPontuacao[]
+  sugestoes_acao SugestaoAcao[]
+  propriedades   DispositivoProprietario[]
+  dispositivos   Dispositivo[]
+  orcamentos     Orcamento[]
+  ordens_servico OrdemServico[]
+  vendas         Venda[]
+  titulos        TituloFinanceiro[]
+  notificacoes   Notificacao[]
+
+  // dedupe por empresa (índices parciais WHERE deleted_at IS NULL na migração)
+  @@index([empresa_id, email_normalizado])
+  @@index([empresa_id, telefone_e164])
+  @@index([empresa_id, whatsapp_e164])
+  @@index([empresa_id, quadrante, score_total])
+  @@index([empresa_id, ciclo_vida])
+  @@map("contato")
+}
+
+enum TipoOrigem {
+  FORMULARIO_SITE
+  ORCAMENTO_ONLINE
+  WHATSAPP
+  INSTAGRAM
+  FACEBOOK
+  GOOGLE_ADS
+  INDICACAO
+  BALCAO
+  TELEFONE
+  IMPORTACAO
+  MANUAL
+  OUTRO
+}
+
+model OrigemLead {
+  id         String     @id @default(uuid(7)) @db.Uuid
+  tenant_id  String     @db.Uuid
+  empresa_id String     @db.Uuid
+  nome       String
+  tipo       TipoOrigem
+  ativo      Boolean    @default(true)
+
+  empresa  Empresa       @relation(fields: [empresa_id], references: [id])
+  contatos Contato[]
+  capturas CapturaLead[]
+
+  @@unique([empresa_id, nome])
+  @@map("origem_lead")
+}
+
+enum StatusCaptura {
+  RECEBIDA
+  PROCESSADA
+  DUPLICADA /// mesclada em contato existente
+  REJEITADA
+}
+
+/// Cada toque de entrada (form, orçamento online abandonado, msg WhatsApp…),
+/// guardado bruto + atribuição de marketing.
+model CapturaLead {
+  id              String        @id @default(uuid(7)) @db.Uuid
+  tenant_id       String        @db.Uuid
+  empresa_id      String        @db.Uuid
+  contato_id      String?       @db.Uuid
+  origem_id       String?       @db.Uuid
+  evento          String /// ex.: form_contato, orcamento_iniciado, orcamento_abandonado
+  payload         Json
+  utm_source      String?
+  utm_medium      String?
+  utm_campaign    String?
+  utm_term        String?
+  utm_content     String?
+  landing_page    String?
+  referrer        String?
+  ip              String?
+  user_agent      String?
+  idempotency_key String?
+  status          StatusCaptura @default(RECEBIDA)
+  erro            String?
+  recebido_em     DateTime      @default(now())
+
+  empresa Empresa     @relation(fields: [empresa_id], references: [id])
+  contato Contato?    @relation(fields: [contato_id], references: [id])
+  origem  OrigemLead? @relation(fields: [origem_id], references: [id])
+
+  @@unique([empresa_id, idempotency_key])
+  @@index([empresa_id, recebido_em])
+  @@map("captura_lead")
+}
+
+enum FinalidadeConsentimento {
+  TRANSACIONAL /// avisos de orçamento/OS (base legal: execução de contrato)
+  MARKETING /// ofertas, nutrição (base legal: consentimento)
+}
+
+/// LGPD — prova de consentimento/opt-out por canal e finalidade.
+model Consentimento {
+  id          String                  @id @default(uuid(7)) @db.Uuid
+  tenant_id   String                  @db.Uuid
+  contato_id  String                  @db.Uuid
+  canal       CanalComunicacao
+  finalidade  FinalidadeConsentimento
+  concedido   Boolean
+  base_legal  String /// consentimento | execucao_contrato | legitimo_interesse
+  evidencia   Json? /// texto exibido, ip, url, captura_id
+  coletado_em DateTime                @default(now())
+  revogado_em DateTime?
+
+  contato Contato @relation(fields: [contato_id], references: [id], onDelete: Cascade)
+
+  @@index([contato_id, canal, finalidade])
+  @@map("consentimento")
+}
+
+model Funil {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  tenant_id  String   @db.Uuid
+  empresa_id String   @db.Uuid
+  nome       String
+  padrao     Boolean  @default(false)
+  ativo      Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  empresa  Empresa      @relation(fields: [empresa_id], references: [id])
+  etapas   EtapaFunil[]
+  negocios Negocio[]
+
+  @@map("funil")
+}
+
+enum TipoEtapa {
+  ABERTA
+  GANHO
+  PERDIDO
+  NUTRICAO
+}
+
+/// Etapas padrão: Novo contato → Qualificação → Diagnóstico/Orçamento →
+/// Orçamento enviado → Negociação → Ganho | Perdido | Nutrição.
+model EtapaFunil {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  funil_id      String    @db.Uuid
+  nome          String
+  ordem         Int
+  tipo          TipoEtapa @default(ABERTA)
+  probabilidade Int       @default(0) /// % para forecast
+  sla_horas     Int? /// "rotting" estilo Pipedrive
+  cor           String?
+
+  funil      Funil            @relation(fields: [funil_id], references: [id], onDelete: Cascade)
+  requisitos RequisitoEtapa[]
+  negocios   Negocio[]
+
+  @@unique([funil_id, ordem])
+  @@map("etapa_funil")
+}
+
+enum TipoRequisito {
+  CAMPO /// um campo precisa estar preenchido (ex.: contato.whatsapp_e164)
+  TAREFA /// uma tarefa precisa estar concluída (gerada automaticamente)
+  REGRA /// expressão (ex.: orcamento.status == ENVIADO)
+}
+
+/// "Blueprint" (Zoho): o que é preciso para SAIR desta etapa.
+/// Alimenta a completude do perfil e gera tarefas automaticamente.
+model RequisitoEtapa {
+  id            String        @id @default(uuid(7)) @db.Uuid
+  etapa_id      String        @db.Uuid
+  tipo          TipoRequisito
+  chave         String /// caminho do campo ou chave da regra
+  descricao     String /// texto exibido ao usuário ("Identificar o dispositivo")
+  obrigatorio   Boolean       @default(true) /// false = recomendado (só pesa na completude)
+  ordem         Int           @default(0)
+  titulo_tarefa String? /// quando tipo=TAREFA, título da tarefa a criar
+
+  etapa   EtapaFunil @relation(fields: [etapa_id], references: [id], onDelete: Cascade)
+  tarefas Tarefa[]
+
+  @@map("requisito_etapa")
+}
+
+enum InteresseNegocio {
+  REPARO
+  DIAGNOSTICO
+  MANUTENCAO_PREVENTIVA
+  RECUPERACAO_DADOS
+  UPGRADE
+  VENDA_PRODUTO
+  OUTRO
+}
+
+enum Urgencia {
+  BAIXA
+  MEDIA
+  ALTA
+}
+
+enum StatusNegocio {
+  ABERTO
+  GANHO
+  PERDIDO
+  NUTRICAO
+}
+
+/// Oportunidade (deal). Um contato pode ter várias (um por demanda/dispositivo).
+/// GANHO = orçamento aprovado convertido em OS.
+model Negocio {
+  id                  String           @id @default(uuid(7)) @db.Uuid
+  tenant_id           String           @db.Uuid
+  empresa_id          String           @db.Uuid
+  contato_id          String           @db.Uuid
+  funil_id            String           @db.Uuid
+  etapa_id            String           @db.Uuid
+  titulo              String
+  interesse           InteresseNegocio @default(REPARO)
+  tipo_dispositivo    TipoDispositivo?
+  dispositivo_id      String?          @db.Uuid
+  descricao_problema  String?
+  urgencia            Urgencia?
+  valor_estimado      Decimal?         @db.Decimal(14, 2)
+  probabilidade       Int? /// sobrescreve a da etapa
+  previsao_fechamento DateTime?        @db.Date
+  status              StatusNegocio    @default(ABERTO)
+  motivo_perda_id     String?          @db.Uuid
+  responsavel_id      String?          @db.Uuid
+  entrou_etapa_em     DateTime         @default(now())
+  fechado_em          DateTime?
+  completude          Int              @default(0)
+  created_at          DateTime         @default(now())
+  updated_at          DateTime         @updatedAt
+  deleted_at          DateTime?
+
+  empresa      Empresa      @relation(fields: [empresa_id], references: [id])
+  contato      Contato      @relation(fields: [contato_id], references: [id])
+  funil        Funil        @relation(fields: [funil_id], references: [id])
+  etapa        EtapaFunil   @relation(fields: [etapa_id], references: [id])
+  dispositivo  Dispositivo? @relation(fields: [dispositivo_id], references: [id])
+  motivo_perda MotivoPerda? @relation(fields: [motivo_perda_id], references: [id])
+  responsavel  Membro?      @relation("NegocioResponsavel", fields: [responsavel_id], references: [id])
+
+  historico_etapas HistoricoEtapaNegocio[]
+  atividades       Atividade[]
+  tarefas          Tarefa[]
+  sugestoes_acao   SugestaoAcao[]
+  orcamentos       Orcamento[]
+  ordens_servico   OrdemServico[]
+
+  @@index([empresa_id, status, etapa_id])
+  @@index([contato_id])
+  @@map("negocio")
+}
+
+model MotivoPerda {
+  id         String  @id @default(uuid(7)) @db.Uuid
+  tenant_id  String  @db.Uuid
+  empresa_id String  @db.Uuid
+  nome       String /// preço, prazo, sem retorno, conserto inviável, comprou novo…
+  ativo      Boolean @default(true)
+
+  empresa  Empresa   @relation(fields: [empresa_id], references: [id])
+  negocios Negocio[]
+
+  @@map("motivo_perda")
+}
+
+model HistoricoEtapaNegocio {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  negocio_id        String   @db.Uuid
+  de_etapa_id       String?  @db.Uuid
+  para_etapa_id     String   @db.Uuid
+  membro_id         String?  @db.Uuid
+  segundos_na_etapa Int?
+  ocorreu_em        DateTime @default(now())
+
+  negocio Negocio @relation(fields: [negocio_id], references: [id], onDelete: Cascade)
+
+  @@index([negocio_id, ocorreu_em])
+  @@map("historico_etapa_negocio")
+}
+
+enum TipoAtividade {
+  LIGACAO
+  WHATSAPP
+  EMAIL
+  SMS
+  VISITA_LOJA
+  REUNIAO
+  NOTA
+  FORMULARIO
+  SISTEMA
+}
+
+enum DirecaoAtividade {
+  ENTRADA
+  SAIDA
+  INTERNA
+}
+
+/// Timeline única de interações (contato, negócio e OS).
+model Atividade {
+  id         String           @id @default(uuid(7)) @db.Uuid
+  tenant_id  String           @db.Uuid
+  empresa_id String           @db.Uuid
+  contato_id String?          @db.Uuid
+  negocio_id String?          @db.Uuid
+  os_id      String?          @db.Uuid
+  tipo       TipoAtividade
+  direcao    DirecaoAtividade @default(INTERNA)
+  assunto    String?
+  conteudo   String?
+  resultado  String? /// atendeu, não atendeu, pediu retorno…
+  membro_id  String?          @db.Uuid
+  metadados  Json?
+  ocorreu_em DateTime         @default(now())
+
+  empresa Empresa       @relation(fields: [empresa_id], references: [id])
+  contato Contato?      @relation(fields: [contato_id], references: [id])
+  negocio Negocio?      @relation(fields: [negocio_id], references: [id])
+  os      OrdemServico? @relation(fields: [os_id], references: [id])
+
+  @@index([contato_id, ocorreu_em])
+  @@index([negocio_id, ocorreu_em])
+  @@index([os_id, ocorreu_em])
+  @@map("atividade")
+}
+
+enum StatusTarefa {
+  PENDENTE
+  EM_ANDAMENTO
+  CONCLUIDA
+  CANCELADA
+}
+
+enum Prioridade {
+  BAIXA
+  NORMAL
+  ALTA
+  URGENTE
+}
+
+enum OrigemTarefa {
+  MANUAL
+  REQUISITO_ETAPA
+  PROXIMA_ACAO
+  AUTOMACAO
+}
+
+model Tarefa {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  tenant_id      String       @db.Uuid
+  empresa_id     String       @db.Uuid
+  contato_id     String?      @db.Uuid
+  negocio_id     String?      @db.Uuid
+  os_id          String?      @db.Uuid
+  titulo         String
+  descricao      String?
+  status         StatusTarefa @default(PENDENTE)
+  prioridade     Prioridade   @default(NORMAL)
+  origem         OrigemTarefa @default(MANUAL)
+  requisito_id   String?      @db.Uuid
+  vence_em       DateTime?
+  responsavel_id String?      @db.Uuid
+  concluida_em   DateTime?
+  created_at     DateTime     @default(now())
+  updated_at     DateTime     @updatedAt
+
+  empresa     Empresa         @relation(fields: [empresa_id], references: [id])
+  contato     Contato?        @relation(fields: [contato_id], references: [id])
+  negocio     Negocio?        @relation(fields: [negocio_id], references: [id])
+  os          OrdemServico?   @relation(fields: [os_id], references: [id])
+  requisito   RequisitoEtapa? @relation(fields: [requisito_id], references: [id])
+  responsavel Membro?         @relation("TarefaResponsavel", fields: [responsavel_id], references: [id])
+  sugestao    SugestaoAcao?
+
+  @@index([empresa_id, responsavel_id, status, vence_em])
+  @@map("tarefa")
+}
+
+enum DimensaoScore {
+  FIT
+  ENGAJAMENTO
+}
+
+/// Regras configuráveis de lead scoring (estilo RD Station: Perfil × Interesse).
+/// condicao: {"campo":"negocio.dispositivo_id","op":"preenchido"} ou
+///           {"evento":"orcamento_abandonado"}
+model RegraPontuacao {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  tenant_id      String        @db.Uuid
+  empresa_id     String        @db.Uuid
+  nome           String
+  dimensao       DimensaoScore
+  condicao       Json
+  pontos         Int /// pode ser negativo
+  meia_vida_dias Int? /// só ENGAJAMENTO: pontos decaem com o tempo
+  ativo          Boolean       @default(true)
+
+  empresa Empresa           @relation(fields: [empresa_id], references: [id])
+  eventos EventoPontuacao[]
+
+  @@map("regra_pontuacao")
+}
+
+/// Ledger de pontos — torna o score explicável ("por que este lead está quente?").
+model EventoPontuacao {
+  id         String        @id @default(uuid(7)) @db.Uuid
+  tenant_id  String        @db.Uuid
+  contato_id String        @db.Uuid
+  regra_id   String?       @db.Uuid
+  dimensao   DimensaoScore
+  pontos     Int
+  motivo     String
+  ocorreu_em DateTime      @default(now())
+
+  contato Contato         @relation(fields: [contato_id], references: [id], onDelete: Cascade)
+  regra   RegraPontuacao? @relation(fields: [regra_id], references: [id])
+
+  @@index([contato_id, ocorreu_em])
+  @@map("evento_pontuacao")
+}
+
+enum TipoAcao {
+  LIGAR
+  ENVIAR_WHATSAPP
+  ENVIAR_EMAIL
+  ENVIAR_SMS
+  COMPLETAR_PERFIL
+  IDENTIFICAR_DISPOSITIVO
+  ELABORAR_ORCAMENTO
+  FOLLOW_UP_ORCAMENTO
+  AGENDAR_ENTRADA
+  OFERECER_UPSELL
+  REATIVAR_CLIENTE
+  PEDIR_AVALIACAO
+}
+
+/// Next Best Action — regras priorizadas avaliadas por job.
+/// ex.: "Orçamento ENVIADO há > 48h sem resposta" → FOLLOW_UP_ORCAMENTO via canal preferido.
+model RegraProximaAcao {
+  id                 String   @id @default(uuid(7)) @db.Uuid
+  tenant_id          String   @db.Uuid
+  empresa_id         String   @db.Uuid
+  nome               String
+  prioridade         Int /// menor = mais importante
+  condicao           Json
+  acao               TipoAcao
+  modelo_mensagem_id String?  @db.Uuid
+  prazo_horas        Int      @default(24)
+  ativo              Boolean  @default(true)
+
+  empresa   Empresa        @relation(fields: [empresa_id], references: [id])
+  sugestoes SugestaoAcao[]
+
+  @@map("regra_proxima_acao")
+}
+
+enum StatusSugestao {
+  SUGERIDA
+  ACEITA /// virou tarefa ou foi executada
+  DESCARTADA
+  EXPIRADA
+}
+
+model SugestaoAcao {
+  id         String         @id @default(uuid(7)) @db.Uuid
+  tenant_id  String         @db.Uuid
+  empresa_id String         @db.Uuid
+  contato_id String         @db.Uuid
+  negocio_id String?        @db.Uuid
+  regra_id   String?        @db.Uuid
+  acao       TipoAcao
+  titulo     String
+  motivo     String /// explicação exibida ("Orçamento sem resposta há 3 dias")
+  peso       Int /// ordenação na fila do vendedor
+  status     StatusSugestao @default(SUGERIDA)
+  tarefa_id  String?        @unique @db.Uuid
+  expira_em  DateTime?
+  created_at DateTime       @default(now())
+  updated_at DateTime       @updatedAt
+
+  empresa Empresa           @relation(fields: [empresa_id], references: [id])
+  contato Contato           @relation(fields: [contato_id], references: [id], onDelete: Cascade)
+  negocio Negocio?          @relation(fields: [negocio_id], references: [id])
+  regra   RegraProximaAcao? @relation(fields: [regra_id], references: [id])
+  tarefa  Tarefa?           @relation(fields: [tarefa_id], references: [id])
+
+  @@index([empresa_id, status, peso])
+  @@map("sugestao_acao")
+}
+
+model Tag {
+  id         String  @id @default(uuid(7)) @db.Uuid
+  tenant_id  String  @db.Uuid
+  empresa_id String  @db.Uuid
+  nome       String
+  cor        String?
+
+  empresa  Empresa       @relation(fields: [empresa_id], references: [id])
+  vinculos EntidadeTag[]
+
+  @@unique([empresa_id, nome])
+  @@map("tag")
+}
+
+model EntidadeTag {
+  tag_id        String @db.Uuid
+  entidade_tipo String /// contato | negocio | os | dispositivo
+  entidade_id   String @db.Uuid
+
+  tag Tag @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@id([tag_id, entidade_tipo, entidade_id])
+  @@index([entidade_tipo, entidade_id])
+  @@map("entidade_tag")
+}
+
+// =============================================================================
+// 3. DISPOSITIVOS, ACESSÓRIOS E CHECKLISTS
+// =============================================================================
+
+enum TipoDispositivo {
+  CELULAR
+  TABLET
+  NOTEBOOK
+  DESKTOP
+  ALL_IN_ONE
+  OUTRO
+}
+
+/// Catálogo de marcas/modelos (global quando tenant_id é nulo) — autocomplete,
+/// compatibilidade de peças e relatórios "reparos por modelo".
+model ModeloDispositivo {
+  id             String          @id @default(uuid(7)) @db.Uuid
+  tenant_id      String?         @db.Uuid
+  tipo           TipoDispositivo
+  marca          String
+  modelo         String
+  nome_comercial String?
+  ano            Int?
+  specs          Json?
+
+  dispositivos     Dispositivo[]
+  compatibilidades ItemCompatibilidade[]
+
+  @@unique([tenant_id, tipo, marca, modelo])
+  @@map("modelo_dispositivo")
+}
+
+enum StatusDispositivo {
+  ATIVO
+  INATIVO
+  DESCARTADO
+}
+
+/// Base comum. Ogun: Celular + Notebook (campos comuns subiram para cá).
+model Dispositivo {
+  id                    String            @id @default(uuid(7)) @db.Uuid
+  tenant_id             String            @db.Uuid
+  empresa_id            String            @db.Uuid
+  tipo                  TipoDispositivo
+  modelo_catalogo_id    String?           @db.Uuid
+  marca                 String?
+  modelo                String?
+  cor                   String?
+  numero_serie          String?
+  imei                  String?
+  imei_2                String?
+  armazenamento_gb      Int?
+  proprietario_atual_id String?           @db.Uuid
+  /// senha/padrão de desbloqueio: cifrado (AES-GCM, chave por tenant), visível só p/ técnico da OS
+  desbloqueio_cifrado   String?
+  status                StatusDispositivo @default(ATIVO)
+  observacoes           String?
+  created_at            DateTime          @default(now())
+  updated_at            DateTime          @updatedAt
+  deleted_at            DateTime?
+
+  empresa            Empresa            @relation(fields: [empresa_id], references: [id])
+  modelo_catalogo    ModeloDispositivo? @relation(fields: [modelo_catalogo_id], references: [id])
+  proprietario_atual Contato?           @relation(fields: [proprietario_atual_id], references: [id])
+
+  celular       DispositivoCelular?
+  computador    DispositivoComputador?
+  proprietarios DispositivoProprietario[]
+  eventos       DispositivoEvento[]
+  negocios      Negocio[]
+  inspecoes     Inspecao[]
+  orcamentos    Orcamento[]
+  ordens        OrdemServico[]
+
+  @@index([empresa_id, imei])
+  @@index([empresa_id, numero_serie])
+  @@index([proprietario_atual_id])
+  @@map("dispositivo")
+}
+
+/// Extensão 1:1 para CELULAR/TABLET.
+model DispositivoCelular {
+  dispositivo_id      String   @id @db.Uuid
+  sistema_operacional String? /// iOS, Android
+  versao_so           String?
+  saude_bateria_pct   Int?
+  dual_chip           Boolean?
+  esim                Boolean?
+
+  dispositivo Dispositivo @relation(fields: [dispositivo_id], references: [id], onDelete: Cascade)
+
+  @@map("dispositivo_celular")
+}
+
+enum ArquiteturaCPU {
+  X86
+  X64
+  ARM
+}
+
+enum TipoArmazenamento {
+  HD
+  SSD_SATA
+  SSD_NVME
+  EMMC
+}
+
+enum TipoGPU {
+  INTEGRADA
+  DEDICADA
+}
+
+/// Extensão 1:1 para NOTEBOOK/DESKTOP/ALL_IN_ONE. Ogun: Notebook.
+model DispositivoComputador {
+  dispositivo_id           String             @id @db.Uuid
+  familia_linha            String?
+  sku_fabricante           String?
+  processador              String?
+  arquitetura              ArquiteturaCPU?
+  memoria_ram_gb           Int?
+  tipo_armazenamento       TipoArmazenamento?
+  capacidade_armazenamento String?
+  gpu_tipo                 TipoGPU?
+  gpu_marca                String?
+  gpu_modelo               String?
+  sistema_operacional      String?
+  potencia_fonte_watts     Int?
+
+  dispositivo Dispositivo @relation(fields: [dispositivo_id], references: [id], onDelete: Cascade)
+
+  @@map("dispositivo_computador")
+}
+
+/// Histórico de posse (aparelho revendido/trocado de dono).
+model DispositivoProprietario {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  dispositivo_id String    @db.Uuid
+  contato_id     String    @db.Uuid
+  desde          DateTime  @default(now())
+  ate            DateTime?
+
+  dispositivo Dispositivo @relation(fields: [dispositivo_id], references: [id], onDelete: Cascade)
+  contato     Contato     @relation(fields: [contato_id], references: [id])
+
+  @@index([dispositivo_id, desde])
+  @@map("dispositivo_proprietario")
+}
+
+enum TipoEventoDispositivo {
+  CADASTRO
+  ENTRADA
+  INSPECAO
+  DIAGNOSTICO
+  ORCAMENTO
+  PECA_SUBSTITUIDA
+  SERVICO_EXECUTADO
+  TESTE_QUALIDADE
+  SAIDA
+  RETORNO_GARANTIA
+  TROCA_PROPRIETARIO
+  OBSERVACAO
+}
+
+/// Prontuário do aparelho (append-only). Escrito automaticamente pelos
+/// fluxos de orçamento/OS/estoque e manualmente via "observação".
+model DispositivoEvento {
+  id             String                @id @default(uuid(7)) @db.Uuid
+  tenant_id      String                @db.Uuid
+  dispositivo_id String                @db.Uuid
+  tipo           TipoEventoDispositivo
+  descricao      String
+  os_id          String?               @db.Uuid
+  orcamento_id   String?               @db.Uuid
+  item_id        String?               @db.Uuid /// peça aplicada
+  membro_id      String?               @db.Uuid
+  dados          Json?
+  ocorreu_em     DateTime              @default(now())
+
+  dispositivo Dispositivo @relation(fields: [dispositivo_id], references: [id], onDelete: Cascade)
+
+  @@index([dispositivo_id, ocorreu_em])
+  @@map("dispositivo_evento")
+}
+
+enum CategoriaAcessorio {
+  ALIMENTACAO
+  CONECTIVIDADE
+  PROTECAO
+  ARMAZENAMENTO
+  PERIFERICO
+  OUTRO
+}
+
+/// Ogun: Tipo Acessorio (as flags definem quais atributos o acessório exibe).
+model TipoAcessorio {
+  id                        String             @id @default(uuid(7)) @db.Uuid
+  tenant_id                 String             @db.Uuid
+  nome                      String
+  categoria                 CategoriaAcessorio
+  tem_padrao_tomada         Boolean            @default(false)
+  tem_tipo_conector         Boolean            @default(false)
+  tem_potencia_watts        Boolean            @default(false)
+  tem_capacidade            Boolean            @default(false)
+  tem_classe_velocidade     Boolean            @default(false)
+  tem_conectividade_sem_fio Boolean            @default(false)
+  tem_layout                Boolean            @default(false)
+  ativo                     Boolean            @default(true)
+
+  recebidos AcessorioRecebido[]
+
+  @@unique([tenant_id, nome])
+  @@map("tipo_acessorio")
+}
+
+enum PadraoTomada {
+  TIPO_A
+  TIPO_C
+  TIPO_N
+}
+
+enum TipoConector {
+  USB_C
+  USB_A
+  MICRO_USB
+  LIGHTNING
+  P2
+  THUNDERBOLT_3
+  THUNDERBOLT_4
+  USB3_TIPO_B
+  MAGSAFE
+  PROPRIETARIO
+  SD
+  MICRO_SD
+}
+
+enum ClasseVelocidade {
+  CLASSE_4
+  CLASSE_6
+  CLASSE_10
+  UHS_I_U1
+  UHS_I_U3
+  UHS_II
+  UHS_III
+  V30
+  V60
+  V90
+}
+
+enum Conectividade {
+  COM_FIO
+  BLUETOOTH
+  DONGLE_2_4GHZ
+  BLUETOOTH_E_2_4GHZ
+}
+
+enum LayoutTeclado {
+  ABNT2
+  US_INTERNACIONAL
+  UK
+  OUTRO
+}
+
+/// Ogun: Acessorio Cliente (child table) — aqui ligado a orçamento OU OS,
+/// com controle de devolução na entrega.
+model AcessorioRecebido {
+  id                String            @id @default(uuid(7)) @db.Uuid
+  tenant_id         String            @db.Uuid
+  orcamento_id      String?           @db.Uuid
+  os_id             String?           @db.Uuid
+  tipo_acessorio_id String            @db.Uuid
+  padrao_tomada     PadraoTomada?
+  tipo_conector     TipoConector?
+  potencia_watts    Int?
+  capacidade        String?
+  classe_velocidade ClasseVelocidade?
+  conectividade     Conectividade?
+  layout_teclado    LayoutTeclado?
+  cor               String?
+  detalhes          String?
+  devolvido_em      DateTime?
+
+  tipo_acessorio TipoAcessorio @relation(fields: [tipo_acessorio_id], references: [id])
+  orcamento      Orcamento?    @relation(fields: [orcamento_id], references: [id], onDelete: Cascade)
+  os             OrdemServico? @relation(fields: [os_id], references: [id], onDelete: Cascade)
+
+  @@map("acessorio_recebido")
+}
+
+enum MomentoInspecao {
+  ENTRADA
+  SAIDA
+}
+
+enum TipoResposta {
+  BOOLEANO
+  OPCOES
+  TEXTO
+  NUMERO
+}
+
+/// Checklist configurável por tipo de dispositivo. O modelo padrão de CELULAR
+/// replica o Ogun: liga_normalmente, tela, display, toque, bateria, áudio,
+/// câmera traseira/frontal.
+model ChecklistModelo {
+  id               String          @id @default(uuid(7)) @db.Uuid
+  tenant_id        String          @db.Uuid
+  nome             String
+  tipo_dispositivo TipoDispositivo
+  momento          MomentoInspecao
+  ativo            Boolean         @default(true)
+
+  itens     ChecklistModeloItem[]
+  inspecoes Inspecao[]
+
+  @@map("checklist_modelo")
+}
+
+model ChecklistModeloItem {
+  id            String       @id @default(uuid(7)) @db.Uuid
+  modelo_id     String       @db.Uuid
+  ordem         Int
+  chave         String /// ex.: bateria
+  rotulo        String /// ex.: "Bateria"
+  tipo_resposta TipoResposta
+  opcoes        String[] /// ex.: ["Ok","Danificada","Ausente","Inchada","Não carrega"]
+  obrigatorio   Boolean      @default(false)
+  /// ex.: {"chave":"liga_normalmente","igual":true} (Ogun: depends_on)
+  depende_de    Json?
+
+  modelo    ChecklistModelo    @relation(fields: [modelo_id], references: [id], onDelete: Cascade)
+  respostas InspecaoResposta[]
+
+  @@unique([modelo_id, chave])
+  @@map("checklist_modelo_item")
+}
+
+/// Ogun: campos de checklist duplicados em Orcamento/OS + Checklist Inicial.
+model Inspecao {
+  id               String          @id @default(uuid(7)) @db.Uuid
+  tenant_id        String          @db.Uuid
+  empresa_id       String          @db.Uuid
+  dispositivo_id   String          @db.Uuid
+  orcamento_id     String?         @db.Uuid
+  os_id            String?         @db.Uuid
+  modelo_id        String?         @db.Uuid
+  momento          MomentoInspecao
+  estado_externo   String /// obrigatório (Ogun: reqd)
+  liga_normalmente Boolean?
+  observacoes      String?
+  realizada_por    String?         @db.Uuid
+  ciente_cliente   Boolean         @default(false) /// cliente confirmou o estado
+  realizada_em     DateTime        @default(now())
+
+  empresa     Empresa            @relation(fields: [empresa_id], references: [id])
+  dispositivo Dispositivo        @relation(fields: [dispositivo_id], references: [id])
+  orcamento   Orcamento?         @relation(fields: [orcamento_id], references: [id])
+  os          OrdemServico?      @relation(fields: [os_id], references: [id])
+  modelo      ChecklistModelo?   @relation(fields: [modelo_id], references: [id])
+  respostas   InspecaoResposta[]
+
+  @@map("inspecao")
+}
+
+model InspecaoResposta {
+  id          String  @id @default(uuid(7)) @db.Uuid
+  inspecao_id String  @db.Uuid
+  item_id     String? @db.Uuid
+  chave       String
+  valor       Json
+  observacao  String?
+
+  inspecao Inspecao             @relation(fields: [inspecao_id], references: [id], onDelete: Cascade)
+  item     ChecklistModeloItem? @relation(fields: [item_id], references: [id])
+
+  @@unique([inspecao_id, chave])
+  @@map("inspecao_resposta")
+}
+
+// =============================================================================
+// 4. ORÇAMENTO (conversão) E BANCADA (ordens de serviço)
+// =============================================================================
+
+enum StatusOrcamento {
+  RASCUNHO
+  ENVIADO
+  VISUALIZADO
+  APROVADO
+  APROVADO_PARCIAL
+  REPROVADO
+  EXPIRADO
+  CANCELADO
+  CONVERTIDO /// virou OS
+}
+
+enum CanalDecisao {
+  LINK_PUBLICO
+  WHATSAPP
+  PRESENCIAL
+  TELEFONE
+  EMAIL
+}
+
+enum CanalEntrada {
+  BALCAO
+  SITE
+  WHATSAPP
+  TELEFONE
+  COLETA
+}
+
+/// Ogun: Orcamento. Dispositivo opcional: permite orçamento remoto
+/// ("quanto custa a tela do iPhone 12?") antes de o aparelho chegar.
+model Orcamento {
+  id                  String          @id @default(uuid(7)) @db.Uuid
+  tenant_id           String          @db.Uuid
+  empresa_id          String          @db.Uuid
+  numero              String
+  versao              Int             @default(1)
+  orcamento_pai_id    String?         @db.Uuid /// revisões
+  contato_id          String          @db.Uuid
+  negocio_id          String?         @db.Uuid
+  tipo_dispositivo    TipoDispositivo
+  dispositivo_id      String?         @db.Uuid
+  canal_entrada       CanalEntrada    @default(BALCAO)
+  descricao_problema  String
+  diagnostico         String?
+  status              StatusOrcamento @default(RASCUNHO)
+  validade            DateTime        @db.Date
+  prazo_execucao_dias Int?
+  garantia_dias       Int?
+  subtotal            Decimal         @default(0) @db.Decimal(14, 2)
+  desconto            Decimal         @default(0) @db.Decimal(14, 2)
+  total               Decimal         @default(0) @db.Decimal(14, 2)
+  condicoes           String?
+  observacoes         String?
+  token_publico       String          @unique /// link de visualização/aprovação
+  enviado_em          DateTime?
+  visualizado_em      DateTime?
+  decidido_em         DateTime?
+  decidido_via        CanalDecisao?
+  motivo_reprovacao   String?
+  responsavel_id      String?         @db.Uuid
+  criado_por          String?         @db.Uuid
+  created_at          DateTime        @default(now())
+  updated_at          DateTime        @updatedAt
+  deleted_at          DateTime?
+
+  empresa       Empresa      @relation(fields: [empresa_id], references: [id])
+  contato       Contato      @relation(fields: [contato_id], references: [id])
+  negocio       Negocio?     @relation(fields: [negocio_id], references: [id])
+  dispositivo   Dispositivo? @relation(fields: [dispositivo_id], references: [id])
+  orcamento_pai Orcamento?   @relation("RevisaoOrcamento", fields: [orcamento_pai_id], references: [id])
+  revisoes      Orcamento[]  @relation("RevisaoOrcamento")
+
+  itens         OrcamentoItem[]
+  acessorios    AcessorioRecebido[]
+  inspecoes     Inspecao[]
+  historico     OrcamentoStatusHistorico[]
+  ordem_servico OrdemServico?
+
+  @@unique([empresa_id, numero])
+  @@index([empresa_id, status, validade])
+  @@index([contato_id])
+  @@map("orcamento")
+}
+
+model OrcamentoStatusHistorico {
+  id           String           @id @default(uuid(7)) @db.Uuid
+  orcamento_id String           @db.Uuid
+  de_status    StatusOrcamento?
+  para_status  StatusOrcamento
+  membro_id    String?          @db.Uuid
+  observacao   String?
+  ocorreu_em   DateTime         @default(now())
+
+  orcamento Orcamento @relation(fields: [orcamento_id], references: [id], onDelete: Cascade)
+
+  @@index([orcamento_id, ocorreu_em])
+  @@map("orcamento_status_historico")
+}
+
+enum TipoItem {
+  PRODUTO
+  SERVICO
+}
+
+/// Ogun: Item Fluxo (linha de orçamento).
+model OrcamentoItem {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  orcamento_id   String   @db.Uuid
+  item_id        String?  @db.Uuid /// nulo = item avulso (não catalogado)
+  tipo           TipoItem
+  descricao      String
+  quantidade     Decimal  @default(1) @db.Decimal(14, 3)
+  preco_unitario Decimal  @db.Decimal(14, 2)
+  desconto       Decimal  @default(0) @db.Decimal(14, 2)
+  total          Decimal  @db.Decimal(14, 2)
+  custo_unitario Decimal? @db.Decimal(14, 2) /// snapshot p/ margem prevista
+  opcional       Boolean  @default(false) /// cliente pode recusar
+  aprovado       Boolean? /// aprovação parcial item a item
+  ordem          Int      @default(0)
+
+  orcamento Orcamento @relation(fields: [orcamento_id], references: [id], onDelete: Cascade)
+  item      Item?     @relation(fields: [item_id], references: [id])
+
+  @@map("orcamento_item")
+}
+
+enum StatusOS {
+  ABERTA
+  EM_DIAGNOSTICO
+  AGUARDANDO_APROVACAO
+  AGUARDANDO_PECAS
+  EM_REPARO
+  EM_TESTES
+  PRONTA
+  ENTREGUE
+  SEM_REPARO /// devolvida sem conserto
+  CANCELADA
+}
+
+enum TipoOS {
+  REPARO
+  GARANTIA
+  MANUTENCAO_PREVENTIVA
+  CORTESIA
+}
+
+/// Ogun: Ordem De Servico. Pode nascer de orçamento aprovado (orcamento_id)
+/// ou direto na bancada (orcamento_id nulo).
+model OrdemServico {
+  id                   String       @id @default(uuid(7)) @db.Uuid
+  tenant_id            String       @db.Uuid
+  empresa_id           String       @db.Uuid
+  numero               String
+  tipo                 TipoOS       @default(REPARO)
+  contato_id           String       @db.Uuid
+  dispositivo_id       String       @db.Uuid
+  orcamento_id         String?      @unique @db.Uuid
+  negocio_id           String?      @db.Uuid
+  os_origem_id         String?      @db.Uuid /// retorno em garantia
+  status               StatusOS     @default(ABERTA)
+  prioridade           Prioridade   @default(NORMAL)
+  canal_entrada        CanalEntrada @default(BALCAO)
+  descricao_problema   String /// relato do cliente
+  diagnostico_tecnico  String?
+  solucao_aplicada     String?
+  tecnico_id           String?      @db.Uuid
+  local_bancada        String? /// gaveta/prateleira
+  prazo                DateTime
+  recebido_em          DateTime     @default(now())
+  iniciado_em          DateTime?
+  concluido_em         DateTime?
+  entregue_em          DateTime?
+  garantia_dias        Int?
+  garantia_ate         DateTime?    @db.Date
+  subtotal             Decimal      @default(0) @db.Decimal(14, 2)
+  desconto             Decimal      @default(0) @db.Decimal(14, 2)
+  total                Decimal      @default(0) @db.Decimal(14, 2)
+  total_pago           Decimal      @default(0) @db.Decimal(14, 2)
+  custo_total          Decimal      @default(0) @db.Decimal(14, 2) /// peças (custo médio) — margem
+  observacoes_internas String?
+  criado_por           String?      @db.Uuid
+  created_at           DateTime     @default(now())
+  updated_at           DateTime     @updatedAt
+  deleted_at           DateTime?
+
+  empresa     Empresa        @relation(fields: [empresa_id], references: [id])
+  contato     Contato        @relation(fields: [contato_id], references: [id])
+  dispositivo Dispositivo    @relation(fields: [dispositivo_id], references: [id])
+  orcamento   Orcamento?     @relation(fields: [orcamento_id], references: [id])
+  negocio     Negocio?       @relation(fields: [negocio_id], references: [id])
+  tecnico     Membro?        @relation("OSTecnico", fields: [tecnico_id], references: [id])
+  os_origem   OrdemServico?  @relation("RetornoGarantia", fields: [os_origem_id], references: [id])
+  retornos    OrdemServico[] @relation("RetornoGarantia")
+
+  itens        OrdemServicoItem[]
+  acessorios   AcessorioRecebido[]
+  inspecoes    Inspecao[]
+  historico    OSStatusHistorico[]
+  apontamentos ApontamentoOS[]
+  atividades   Atividade[]
+  tarefas      Tarefa[]
+  vendas       Venda[]
+  titulos      TituloFinanceiro[]
+
+  @@unique([empresa_id, numero])
+  @@index([empresa_id, status, prazo])
+  @@index([empresa_id, tecnico_id, status])
+  @@index([dispositivo_id])
+  @@map("ordem_servico")
+}
+
+/// Base de SLA/TAT e da timeline da bancada; dispara notificações.
+model OSStatusHistorico {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  os_id       String    @db.Uuid
+  de_status   StatusOS?
+  para_status StatusOS
+  membro_id   String?   @db.Uuid
+  observacao  String?
+  notificar   Boolean   @default(true)
+  ocorreu_em  DateTime  @default(now())
+
+  os OrdemServico @relation(fields: [os_id], references: [id], onDelete: Cascade)
+
+  @@index([os_id, ocorreu_em])
+  @@map("os_status_historico")
+}
+
+enum StatusPeca {
+  A_COMPRAR
+  RESERVADA
+  APLICADA
+  DEVOLVIDA
+}
+
+/// Ogun: Item Fluxo (linha de OS). Peças movimentam estoque ao serem APLICADAS.
+model OrdemServicoItem {
+  id             String      @id @default(uuid(7)) @db.Uuid
+  os_id          String      @db.Uuid
+  item_id        String?     @db.Uuid
+  tipo           TipoItem
+  descricao      String
+  quantidade     Decimal     @default(1) @db.Decimal(14, 3)
+  preco_unitario Decimal     @db.Decimal(14, 2)
+  desconto       Decimal     @default(0) @db.Decimal(14, 2)
+  total          Decimal     @db.Decimal(14, 2)
+  custo_unitario Decimal?    @db.Decimal(14, 2) /// custo médio no momento da baixa
+  status_peca    StatusPeca? /// só PRODUTO com controle de estoque
+  tecnico_id     String?     @db.Uuid /// SERVICO: quem executou
+  garantia_dias  Int?
+  ordem          Int         @default(0)
+
+  os         OrdemServico       @relation(fields: [os_id], references: [id], onDelete: Cascade)
+  item       Item?              @relation(fields: [item_id], references: [id])
+  reservas   ReservaEstoque[]
+  movimentos MovimentoEstoque[]
+
+  @@map("ordem_servico_item")
+}
+
+enum TipoApontamento {
+  NOTA_TECNICA
+  TEMPO
+}
+
+/// Diário do técnico na bancada (notas e tempo gasto).
+model ApontamentoOS {
+  id         String          @id @default(uuid(7)) @db.Uuid
+  os_id      String          @db.Uuid
+  membro_id  String          @db.Uuid
+  tipo       TipoApontamento
+  texto      String?
+  minutos    Int?
+  ocorreu_em DateTime        @default(now())
+
+  os     OrdemServico @relation(fields: [os_id], references: [id], onDelete: Cascade)
+  membro Membro       @relation(fields: [membro_id], references: [id])
+
+  @@index([os_id, ocorreu_em])
+  @@map("apontamento_os")
+}
+
+enum CategoriaAnexo {
+  FOTO_ENTRADA
+  FOTO_SAIDA
+  FOTO_REPARO
+  LAUDO
+  NOTA_FISCAL
+  TERMO
+  OUTRO
+}
+
+/// Arquivos (S3/R2) ligados a qualquer entidade.
+model Anexo {
+  id            String         @id @default(uuid(7)) @db.Uuid
+  tenant_id     String         @db.Uuid
+  empresa_id    String         @db.Uuid
+  entidade_tipo String
+  entidade_id   String         @db.Uuid
+  categoria     CategoriaAnexo @default(OUTRO)
+  nome          String
+  mime          String
+  tamanho_bytes Int
+  storage_key   String
+  publico       Boolean        @default(false) /// visível no link do cliente
+  enviado_por   String?        @db.Uuid
+  created_at    DateTime       @default(now())
+
+  @@index([entidade_tipo, entidade_id])
+  @@map("anexo")
+}
+
+// =============================================================================
+// 5. ESTOQUE, COMPRAS, VENDAS E FINANCEIRO (simplificado)
+// -----------------------------------------------------------------------------
+// O usuário vê: nome, quantidade, descrição, preço de compra, preço de venda,
+// fornecedor, histórico. Por baixo: ledger de estoque com custo médio móvel,
+// títulos a pagar/receber e margem por OS — mapeáveis para ERPNext
+// (Item, Supplier, Purchase Receipt/Invoice, Stock Ledger Entry, Sales Invoice,
+// Payment Entry) via IntegracaoRef.
+// =============================================================================
+
+model Fornecedor {
+  id                 String    @id @default(uuid(7)) @db.Uuid
+  tenant_id          String    @db.Uuid
+  empresa_id         String    @db.Uuid
+  nome               String
+  documento          String?
+  contato_nome       String?
+  email              String?
+  telefone           String?
+  site               String?
+  prazo_entrega_dias Int?
+  observacoes        String?
+  ativo              Boolean   @default(true)
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+  deleted_at         DateTime?
+
+  empresa Empresa            @relation(fields: [empresa_id], references: [id])
+  itens   Item[]
+  compras Compra[]
+  titulos TituloFinanceiro[]
+
+  @@map("fornecedor")
+}
+
+model CategoriaItem {
+  id         String  @id @default(uuid(7)) @db.Uuid
+  tenant_id  String  @db.Uuid
+  empresa_id String  @db.Uuid
+  nome       String /// Telas, Baterias, Conectores, Mão de obra…
+  pai_id     String? @db.Uuid
+
+  empresa Empresa         @relation(fields: [empresa_id], references: [id])
+  pai     CategoriaItem?  @relation("ArvoreCategoria", fields: [pai_id], references: [id])
+  filhas  CategoriaItem[] @relation("ArvoreCategoria")
+  itens   Item[]
+
+  @@unique([empresa_id, nome])
+  @@map("categoria_item")
+}
+
+/// Produto (peça/acessório) ou serviço (mão de obra). Ogun: ERPNext Item + Item Price.
+model Item {
+  id                   String    @id @default(uuid(7)) @db.Uuid
+  tenant_id            String    @db.Uuid
+  empresa_id           String    @db.Uuid
+  tipo                 TipoItem
+  sku                  String?
+  nome                 String
+  descricao            String?
+  categoria_id         String?   @db.Uuid
+  unidade              String    @default("UN")
+  controla_estoque     Boolean   @default(true) /// SERVICO sempre false
+  preco_venda          Decimal   @default(0) @db.Decimal(14, 2)
+  preco_compra         Decimal?  @db.Decimal(14, 2) /// último preço pago (informativo)
+  custo_medio          Decimal   @default(0) @db.Decimal(14, 2) /// calculado pelo ledger
+  estoque_atual        Decimal   @default(0) @db.Decimal(14, 3) /// cache do ledger
+  estoque_reservado    Decimal   @default(0) @db.Decimal(14, 3)
+  estoque_minimo       Decimal   @default(0) @db.Decimal(14, 3)
+  fornecedor_padrao_id String?   @db.Uuid
+  tempo_estimado_min   Int? /// SERVICO
+  garantia_dias        Int?
+  ativo                Boolean   @default(true)
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+  deleted_at           DateTime?
+
+  empresa           Empresa        @relation(fields: [empresa_id], references: [id])
+  categoria         CategoriaItem? @relation(fields: [categoria_id], references: [id])
+  fornecedor_padrao Fornecedor?    @relation(fields: [fornecedor_padrao_id], references: [id])
+
+  compatibilidades ItemCompatibilidade[]
+  historico_precos HistoricoPreco[]
+  linhas_orcamento OrcamentoItem[]
+  linhas_os        OrdemServicoItem[]
+  linhas_compra    CompraItem[]
+  linhas_venda     VendaItem[]
+  movimentos       MovimentoEstoque[]
+  reservas         ReservaEstoque[]
+
+  @@unique([empresa_id, sku])
+  @@index([empresa_id, nome])
+  @@map("item")
+}
+
+/// "Esta tela serve no iPhone 12 e 12 Pro" — sugestão de peças no orçamento.
+model ItemCompatibilidade {
+  item_id   String @db.Uuid
+  modelo_id String @db.Uuid
+
+  item   Item              @relation(fields: [item_id], references: [id], onDelete: Cascade)
+  modelo ModeloDispositivo @relation(fields: [modelo_id], references: [id], onDelete: Cascade)
+
+  @@id([item_id, modelo_id])
+  @@map("item_compatibilidade")
+}
+
+enum TipoPreco {
+  VENDA
+  COMPRA
+}
+
+model HistoricoPreco {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  item_id        String    @db.Uuid
+  tipo           TipoPreco
+  valor_anterior Decimal?  @db.Decimal(14, 2)
+  valor_novo     Decimal   @db.Decimal(14, 2)
+  membro_id      String?   @db.Uuid
+  ocorreu_em     DateTime  @default(now())
+
+  item Item @relation(fields: [item_id], references: [id], onDelete: Cascade)
+
+  @@index([item_id, ocorreu_em])
+  @@map("historico_preco")
+}
+
+enum StatusCompra {
+  RASCUNHO
+  RECEBIDA /// gera ENTRADA no estoque + título a pagar
+  CANCELADA /// estorno
+}
+
+/// "Comprei" — entrada de mercadoria (ERPNext: Purchase Receipt + Purchase Invoice).
+model Compra {
+  id               String       @id @default(uuid(7)) @db.Uuid
+  tenant_id        String       @db.Uuid
+  empresa_id       String       @db.Uuid
+  numero           String
+  fornecedor_id    String?      @db.Uuid
+  documento_fiscal String? /// nº NF
+  data             DateTime     @db.Date
+  status           StatusCompra @default(RASCUNHO)
+  frete            Decimal      @default(0) @db.Decimal(14, 2) /// rateado no custo dos itens
+  outras_despesas  Decimal      @default(0) @db.Decimal(14, 2)
+  total            Decimal      @default(0) @db.Decimal(14, 2)
+  observacoes      String?
+  criado_por       String?      @db.Uuid
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+
+  empresa    Empresa            @relation(fields: [empresa_id], references: [id])
+  fornecedor Fornecedor?        @relation(fields: [fornecedor_id], references: [id])
+  itens      CompraItem[]
+  titulos    TituloFinanceiro[]
+
+  @@unique([empresa_id, numero])
+  @@map("compra")
+}
+
+model CompraItem {
+  id                   String  @id @default(uuid(7)) @db.Uuid
+  compra_id            String  @db.Uuid
+  item_id              String  @db.Uuid
+  quantidade           Decimal @db.Decimal(14, 3)
+  custo_unitario       Decimal @db.Decimal(14, 2) /// preço pago
+  custo_unitario_final Decimal @db.Decimal(14, 2) /// + rateio frete/despesas
+  total                Decimal @db.Decimal(14, 2)
+
+  compra     Compra             @relation(fields: [compra_id], references: [id], onDelete: Cascade)
+  item       Item               @relation(fields: [item_id], references: [id])
+  movimentos MovimentoEstoque[]
+
+  @@map("compra_item")
+}
+
+enum TipoMovimento {
+  ENTRADA_COMPRA
+  SAIDA_OS
+  SAIDA_VENDA
+  DEVOLUCAO_CLIENTE
+  DEVOLUCAO_FORNECEDOR
+  AJUSTE_ENTRADA /// contagem achou a mais
+  AJUSTE_SAIDA /// contagem achou a menos
+  PERDA /// quebra/defeito/uso interno
+  ESTORNO
+}
+
+/// Ledger imutável (ERPNext: Stock Ledger Entry). Saldo e custo médio do Item
+/// são derivados daqui. Correção = novo movimento de ESTORNO, nunca UPDATE.
+model MovimentoEstoque {
+  id                     String        @id @default(uuid(7)) @db.Uuid
+  tenant_id              String        @db.Uuid
+  empresa_id             String        @db.Uuid
+  item_id                String        @db.Uuid
+  tipo                   TipoMovimento
+  quantidade             Decimal       @db.Decimal(14, 3) /// + entrada / − saída
+  custo_unitario         Decimal       @db.Decimal(14, 2)
+  valor_total            Decimal       @db.Decimal(14, 2)
+  saldo_apos             Decimal       @db.Decimal(14, 3)
+  custo_medio_apos       Decimal       @db.Decimal(14, 2)
+  compra_item_id         String?       @db.Uuid
+  os_item_id             String?       @db.Uuid
+  venda_item_id          String?       @db.Uuid
+  movimento_estornado_id String?       @unique @db.Uuid
+  motivo                 String?
+  membro_id              String?       @db.Uuid
+  ocorreu_em             DateTime      @default(now())
+
+  empresa     Empresa           @relation(fields: [empresa_id], references: [id])
+  item        Item              @relation(fields: [item_id], references: [id])
+  compra_item CompraItem?       @relation(fields: [compra_item_id], references: [id])
+  os_item     OrdemServicoItem? @relation(fields: [os_item_id], references: [id])
+  venda_item  VendaItem?        @relation(fields: [venda_item_id], references: [id])
+  estornado   MovimentoEstoque? @relation("Estorno", fields: [movimento_estornado_id], references: [id])
+  estorno     MovimentoEstoque? @relation("Estorno")
+
+  @@index([item_id, ocorreu_em])
+  @@index([empresa_id, tipo, ocorreu_em])
+  @@map("movimento_estoque")
+}
+
+enum StatusReserva {
+  ATIVA
+  CONSUMIDA
+  LIBERADA
+}
+
+/// Peça separada para uma OS (não sai do saldo, sai do "disponível").
+model ReservaEstoque {
+  id         String        @id @default(uuid(7)) @db.Uuid
+  item_id    String        @db.Uuid
+  os_item_id String        @db.Uuid
+  quantidade Decimal       @db.Decimal(14, 3)
+  status     StatusReserva @default(ATIVA)
+  created_at DateTime      @default(now())
+  updated_at DateTime      @updatedAt
+
+  item    Item             @relation(fields: [item_id], references: [id])
+  os_item OrdemServicoItem @relation(fields: [os_item_id], references: [id], onDelete: Cascade)
+
+  @@map("reserva_estoque")
+}
+
+enum OrigemVenda {
+  ORDEM_SERVICO
+  BALCAO
+}
+
+enum StatusVenda {
+  ABERTA
+  FATURADA /// receita reconhecida
+  CANCELADA
+}
+
+/// Reconhecimento de receita (ERPNext: Sales Invoice). Gerada na ENTREGA da OS
+/// ou numa venda de balcão (ex.: carregador avulso).
+model Venda {
+  id          String      @id @default(uuid(7)) @db.Uuid
+  tenant_id   String      @db.Uuid
+  empresa_id  String      @db.Uuid
+  numero      String
+  origem      OrigemVenda
+  os_id       String?     @db.Uuid
+  contato_id  String?     @db.Uuid
+  status      StatusVenda @default(ABERTA)
+  subtotal    Decimal     @db.Decimal(14, 2)
+  desconto    Decimal     @default(0) @db.Decimal(14, 2)
+  total       Decimal     @db.Decimal(14, 2)
+  custo_total Decimal     @default(0) @db.Decimal(14, 2) /// CMV + custo de peças
+  faturada_em DateTime?
+  criado_por  String?     @db.Uuid
+  created_at  DateTime    @default(now())
+
+  empresa Empresa            @relation(fields: [empresa_id], references: [id])
+  os      OrdemServico?      @relation(fields: [os_id], references: [id])
+  contato Contato?           @relation(fields: [contato_id], references: [id])
+  itens   VendaItem[]
+  titulos TituloFinanceiro[]
+
+  @@unique([empresa_id, numero])
+  @@map("venda")
+}
+
+model VendaItem {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  venda_id       String   @db.Uuid
+  item_id        String?  @db.Uuid
+  tipo           TipoItem
+  descricao      String
+  quantidade     Decimal  @db.Decimal(14, 3)
+  preco_unitario Decimal  @db.Decimal(14, 2)
+  desconto       Decimal  @default(0) @db.Decimal(14, 2)
+  total          Decimal  @db.Decimal(14, 2)
+  custo_unitario Decimal  @default(0) @db.Decimal(14, 2)
+
+  venda      Venda              @relation(fields: [venda_id], references: [id], onDelete: Cascade)
+  item       Item?              @relation(fields: [item_id], references: [id])
+  movimentos MovimentoEstoque[]
+
+  @@map("venda_item")
+}
+
+enum TipoTitulo {
+  PAGAR
+  RECEBER
+}
+
+enum StatusTitulo {
+  ABERTO
+  PARCIAL
+  PAGO
+  CANCELADO
+}
+
+enum CategoriaFinanceira {
+  RECEITA_SERVICO
+  RECEITA_PRODUTO
+  COMPRA_MERCADORIA
+  DESPESA_OPERACIONAL
+  OUTRA
+}
+
+/// Contas a pagar/receber (ERPNext: GL via Purchase/Sales Invoice + Payment Entry).
+model TituloFinanceiro {
+  id            String              @id @default(uuid(7)) @db.Uuid
+  tenant_id     String              @db.Uuid
+  empresa_id    String              @db.Uuid
+  tipo          TipoTitulo
+  categoria     CategoriaFinanceira
+  descricao     String
+  contato_id    String?             @db.Uuid
+  fornecedor_id String?             @db.Uuid
+  compra_id     String?             @db.Uuid
+  venda_id      String?             @db.Uuid
+  os_id         String?             @db.Uuid /// sinal/adiantamento antes da venda
+  valor         Decimal             @db.Decimal(14, 2)
+  valor_pago    Decimal             @default(0) @db.Decimal(14, 2)
+  vencimento    DateTime            @db.Date
+  status        StatusTitulo        @default(ABERTO)
+  created_at    DateTime            @default(now())
+  updated_at    DateTime            @updatedAt
+
+  empresa    Empresa       @relation(fields: [empresa_id], references: [id])
+  contato    Contato?      @relation(fields: [contato_id], references: [id])
+  fornecedor Fornecedor?   @relation(fields: [fornecedor_id], references: [id])
+  compra     Compra?       @relation(fields: [compra_id], references: [id])
+  venda      Venda?        @relation(fields: [venda_id], references: [id])
+  os         OrdemServico? @relation(fields: [os_id], references: [id])
+  pagamentos Pagamento[]
+
+  @@index([empresa_id, tipo, status, vencimento])
+  @@map("titulo_financeiro")
+}
+
+enum FormaPagamento {
+  PIX
+  DINHEIRO
+  CARTAO_CREDITO
+  CARTAO_DEBITO
+  BOLETO
+  TRANSFERENCIA
+  OUTRO
+}
+
+model Pagamento {
+  id                 String         @id @default(uuid(7)) @db.Uuid
+  titulo_id          String         @db.Uuid
+  valor              Decimal        @db.Decimal(14, 2)
+  forma              FormaPagamento
+  parcelas           Int            @default(1)
+  taxa               Decimal        @default(0) @db.Decimal(14, 2) /// taxa de maquininha
+  referencia_externa String?
+  membro_id          String?        @db.Uuid
+  pago_em            DateTime       @default(now())
+  estornado_em       DateTime?
+
+  titulo TituloFinanceiro @relation(fields: [titulo_id], references: [id])
+
+  @@index([titulo_id])
+  @@map("pagamento")
+}
+
+enum SistemaExterno {
+  ERPNEXT
+}
+
+/// Ponte para sincronização futura com ERPNext (ou outro ERP/fiscal).
+model IntegracaoRef {
+  id              String         @id @default(uuid(7)) @db.Uuid
+  tenant_id       String         @db.Uuid
+  empresa_id      String         @db.Uuid
+  sistema         SistemaExterno
+  entidade_tipo   String /// item | fornecedor | contato | compra | venda | movimento
+  entidade_id     String         @db.Uuid
+  id_externo      String /// ex.: Item.item_code, Customer.name
+  sincronizado_em DateTime?
+  status          String         @default("pendente")
+  erro            String?
+
+  @@unique([sistema, entidade_tipo, entidade_id])
+  @@unique([empresa_id, sistema, entidade_tipo, id_externo])
+  @@map("integracao_ref")
+}
+
+// =============================================================================
+// 6. NOTIFICAÇÕES (WhatsApp / e-mail / SMS) — padrão Outbox
+// =============================================================================
+
+enum EventoNotificacao {
+  ORCAMENTO_ENVIADO
+  ORCAMENTO_APROVADO
+  ORCAMENTO_REPROVADO
+  ORCAMENTO_EXPIRANDO
+  OS_ABERTA
+  OS_STATUS_ALTERADO
+  OS_AGUARDANDO_APROVACAO
+  OS_AGUARDANDO_PECAS
+  OS_PRONTA
+  OS_ENTREGUE
+  GARANTIA_EXPIRANDO
+  LEAD_FOLLOW_UP
+  PESQUISA_SATISFACAO
+}
+
+/// Conteúdo por evento × canal. Para WhatsApp fora da janela de 24h a Meta
+/// exige template pré-aprovado (whatsapp_template / idioma).
+model ModeloMensagem {
+  id                String            @id @default(uuid(7)) @db.Uuid
+  tenant_id         String            @db.Uuid
+  empresa_id        String            @db.Uuid
+  evento            EventoNotificacao
+  canal             CanalComunicacao
+  assunto           String? /// e-mail
+  corpo             String /// Handlebars: {{contato.nome}}, {{os.numero}}, {{link}}
+  whatsapp_template String?
+  whatsapp_idioma   String?           @default("pt_BR")
+  ativo             Boolean           @default(true)
+
+  empresa      Empresa       @relation(fields: [empresa_id], references: [id])
+  notificacoes Notificacao[]
+
+  @@unique([empresa_id, evento, canal])
+  @@map("modelo_mensagem")
+}
+
+/// Liga/desliga cada evento por empresa (ex.: avisar só PRONTA e ENTREGUE).
+model ConfigNotificacaoEvento {
+  id         String            @id @default(uuid(7)) @db.Uuid
+  empresa_id String            @db.Uuid
+  evento     EventoNotificacao
+  ativo      Boolean           @default(true)
+  atraso_min Int               @default(0)
+  /// para OS_STATUS_ALTERADO: quais status disparam
+  status_os  StatusOS[]
+
+  empresa Empresa @relation(fields: [empresa_id], references: [id])
+
+  @@unique([empresa_id, evento])
+  @@map("config_notificacao_evento")
+}
+
+enum StatusNotificacao {
+  PENDENTE
+  ENVIANDO
+  ENVIADA
+  ENTREGUE
+  LIDA
+  FALHOU
+  CANCELADA
+}
+
+/// Outbox: criada na MESMA transação da mudança de status; um worker envia,
+/// faz retry/fallback de canal e atualiza via webhooks do provedor.
+model Notificacao {
+  id              String            @id @default(uuid(7)) @db.Uuid
+  tenant_id       String            @db.Uuid
+  empresa_id      String            @db.Uuid
+  contato_id      String            @db.Uuid
+  evento          EventoNotificacao
+  canal           CanalComunicacao
+  destino         String /// e164 ou e-mail resolvido no envio
+  modelo_id       String?           @db.Uuid
+  entidade_tipo   String
+  entidade_id     String            @db.Uuid
+  variaveis       Json
+  conteudo        String? /// renderizado
+  status          StatusNotificacao @default(PENDENTE)
+  tentativas      Int               @default(0)
+  provedor        String? /// meta_cloud, zenvia, twilio, ses, resend…
+  provedor_msg_id String?
+  erro            String?
+  agendada_para   DateTime          @default(now())
+  enviada_em      DateTime?
+  entregue_em     DateTime?
+  lida_em         DateTime?
+  created_at      DateTime          @default(now())
+
+  empresa Empresa         @relation(fields: [empresa_id], references: [id])
+  contato Contato         @relation(fields: [contato_id], references: [id])
+  modelo  ModeloMensagem? @relation(fields: [modelo_id], references: [id])
+
+  @@index([status, agendada_para])
+  @@index([entidade_tipo, entidade_id])
+  @@index([provedor, provedor_msg_id])
+  @@map("notificacao")
+}
+
+// =============================================================================
+// 7. OPERAÇÕES EM MASSA
+// =============================================================================
+
+enum TipoJobLote {
+  LEAD_CRIAR
+  LEAD_ATUALIZAR
+  LEAD_EXCLUIR
+  LEAD_IMPORTAR_CSV
+  ITEM_IMPORTAR_CSV
+}
+
+enum StatusJob {
+  NA_FILA
+  PROCESSANDO
+  CONCLUIDO
+  CONCLUIDO_COM_ERROS
+  FALHOU
+}
+
+/// Lotes grandes (> 500 linhas ou CSV) rodam assíncronos; a API devolve 202 + job_id.
+model JobLote {
+  id              String      @id @default(uuid(7)) @db.Uuid
+  tenant_id       String      @db.Uuid
+  empresa_id      String      @db.Uuid
+  tipo            TipoJobLote
+  status          StatusJob   @default(NA_FILA)
+  total           Int         @default(0)
+  processados     Int         @default(0)
+  sucesso         Int         @default(0)
+  falhas          Int         @default(0)
+  parametros      Json /// filtro, patch, opções de dedupe
+  erros           Json? /// [{linha, campo, mensagem}]
+  arquivo_key     String?
+  idempotency_key String?
+  criado_por      String?     @db.Uuid
+  created_at      DateTime    @default(now())
+  finalizado_em   DateTime?
+
+  empresa Empresa @relation(fields: [empresa_id], references: [id])
+
+  @@unique([empresa_id, idempotency_key])
+  @@map("job_lote")
+}
